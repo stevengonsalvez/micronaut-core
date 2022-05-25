@@ -29,6 +29,7 @@ import io.micronaut.core.io.buffer.ByteBuffer;
 import io.micronaut.core.io.buffer.ByteBufferFactory;
 import io.micronaut.core.io.buffer.ReferenceCounted;
 import io.micronaut.core.order.OrderUtil;
+import io.micronaut.core.propagation.PropagatedContext;
 import io.micronaut.core.reflect.InstantiationUtils;
 import io.micronaut.core.type.Argument;
 import io.micronaut.core.util.ArgumentUtils;
@@ -60,7 +61,6 @@ import io.micronaut.http.client.exceptions.NoHostException;
 import io.micronaut.http.client.exceptions.ReadTimeoutException;
 import io.micronaut.http.client.filter.ClientFilterResolutionContext;
 import io.micronaut.http.client.filter.DefaultHttpClientFilterResolver;
-import io.micronaut.http.client.filters.ClientServerContextFilter;
 import io.micronaut.http.client.multipart.MultipartBody;
 import io.micronaut.http.client.multipart.MultipartDataFactory;
 import io.micronaut.http.client.netty.ssl.NettyClientSslBuilder;
@@ -69,6 +69,7 @@ import io.micronaut.http.client.sse.SseClient;
 import io.micronaut.http.codec.CodecException;
 import io.micronaut.http.codec.MediaTypeCodec;
 import io.micronaut.http.codec.MediaTypeCodecRegistry;
+import io.micronaut.http.context.ServerHttpRequestContext;
 import io.micronaut.http.context.ServerRequestContext;
 import io.micronaut.http.filter.ClientFilterChain;
 import io.micronaut.http.filter.HttpClientFilter;
@@ -95,10 +96,11 @@ import io.micronaut.http.uri.UriBuilder;
 import io.micronaut.http.uri.UriTemplate;
 import io.micronaut.jackson.databind.JacksonDatabindMapper;
 import io.micronaut.json.JsonMapper;
-import io.micronaut.json.codec.MapperMediaTypeCodec;
 import io.micronaut.json.codec.JsonMediaTypeCodec;
 import io.micronaut.json.codec.JsonStreamMediaTypeCodec;
+import io.micronaut.json.codec.MapperMediaTypeCodec;
 import io.micronaut.json.tree.JsonNode;
+import io.micronaut.reactive.ReactivePropagation;
 import io.micronaut.runtime.ApplicationConfiguration;
 import io.micronaut.scheduling.instrument.Instrumentation;
 import io.micronaut.scheduling.instrument.InvocationInstrumenter;
@@ -116,7 +118,18 @@ import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.EmptyByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.*;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFactory;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.ChannelPipeline;
+import io.netty.channel.ChannelPromise;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.MultithreadEventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.pool.AbstractChannelPoolHandler;
 import io.netty.channel.pool.AbstractChannelPoolMap;
@@ -138,7 +151,18 @@ import io.netty.handler.codec.http.multipart.InterfaceHttpData;
 import io.netty.handler.codec.http.websocketx.WebSocketClientHandshakerFactory;
 import io.netty.handler.codec.http.websocketx.WebSocketVersion;
 import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketClientCompressionHandler;
-import io.netty.handler.codec.http2.*;
+import io.netty.handler.codec.http2.DefaultHttp2Connection;
+import io.netty.handler.codec.http2.DelegatingDecompressorFrameListener;
+import io.netty.handler.codec.http2.Http2ClientUpgradeCodec;
+import io.netty.handler.codec.http2.Http2Connection;
+import io.netty.handler.codec.http2.Http2FrameListener;
+import io.netty.handler.codec.http2.Http2FrameLogger;
+import io.netty.handler.codec.http2.Http2Settings;
+import io.netty.handler.codec.http2.Http2Stream;
+import io.netty.handler.codec.http2.HttpConversionUtil;
+import io.netty.handler.codec.http2.HttpToHttp2ConnectionHandler;
+import io.netty.handler.codec.http2.HttpToHttp2ConnectionHandlerBuilder;
+import io.netty.handler.codec.http2.InboundHttp2ToHttpAdapterBuilder;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.proxy.HttpProxyHandler;
 import io.netty.handler.proxy.Socks5ProxyHandler;
@@ -186,7 +210,14 @@ import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -195,7 +226,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static io.micronaut.http.client.HttpClientConfiguration.DEFAULT_SHUTDOWN_QUIET_PERIOD_MILLISECONDS;
@@ -785,7 +815,7 @@ public class DefaultHttpClient implements
 
     @Override
     public <I> Publisher<ByteBuffer<?>> dataStream(@NonNull io.micronaut.http.HttpRequest<I> request, @NonNull Argument<?> errorType) {
-        final io.micronaut.http.HttpRequest<Object> parentRequest = ServerRequestContext.currentRequest().orElse(null);
+        final io.micronaut.http.HttpRequest<Object> parentRequest = ServerHttpRequestContext.get();
         return new MicronautFlux<>(Flux.from(resolveRequestURI(request))
                 .flatMap(requestURI -> dataStreamImpl(request, errorType, parentRequest, requestURI)))
                 .doAfterNext(buffer -> {
@@ -806,7 +836,7 @@ public class DefaultHttpClient implements
 
     @Override
     public <I> Publisher<io.micronaut.http.HttpResponse<ByteBuffer<?>>> exchangeStream(@NonNull io.micronaut.http.HttpRequest<I> request, @NonNull Argument<?> errorType) {
-        io.micronaut.http.HttpRequest<Object> parentRequest = ServerRequestContext.currentRequest().orElse(null);
+        final io.micronaut.http.HttpRequest<Object> parentRequest = ServerHttpRequestContext.get();
         return new MicronautFlux<>(Flux.from(resolveRequestURI(request))
                 .flatMap(uri -> exchangeStreamImpl(parentRequest, request, errorType, uri)))
                 .doAfterNext(byteBufferHttpResponse -> {
@@ -824,7 +854,7 @@ public class DefaultHttpClient implements
 
     @Override
     public <I, O> Publisher<O> jsonStream(@NonNull io.micronaut.http.HttpRequest<I> request, @NonNull Argument<O> type, @NonNull Argument<?> errorType) {
-        final io.micronaut.http.HttpRequest<Object> parentRequest = ServerRequestContext.currentRequest().orElse(null);
+        final io.micronaut.http.HttpRequest<Object> parentRequest = ServerHttpRequestContext.get();
         return Flux.from(resolveRequestURI(request))
                 .flatMap(requestURI -> jsonStreamImpl(parentRequest, request, type, errorType, requestURI));
     }
@@ -842,7 +872,7 @@ public class DefaultHttpClient implements
 
     @Override
     public <I, O, E> Publisher<io.micronaut.http.HttpResponse<O>> exchange(@NonNull io.micronaut.http.HttpRequest<I> request, @NonNull Argument<O> bodyType, @NonNull Argument<E> errorType) {
-        final io.micronaut.http.HttpRequest<Object> parentRequest = ServerRequestContext.currentRequest().orElse(null);
+        final io.micronaut.http.HttpRequest<Object> parentRequest = ServerHttpRequestContext.get();
         Publisher<URI> uriPublisher = resolveRequestURI(request);
         return Flux.from(uriPublisher)
                 .switchMap(uri -> exchangeImpl(uri, parentRequest, request, bodyType, errorType));
@@ -1027,7 +1057,7 @@ public class DefaultHttpClient implements
                     } finally {
                         chunk.release();
                     }
-                }).subscribe(p);
+                }).subscribe(ReactivePropagation.propagate(PropagatedContext.getOrEmpty(), (Subscriber<byte[]>) p));
             }, streamArray);
             return Flux.from(jsonProcessor)
                     .map(jsonNode -> mediaTypeCodec.decode(type, jsonNode));
@@ -1609,36 +1639,30 @@ public class DefaultHttpClient implements
             URI requestURI,
             AtomicReference<io.micronaut.http.HttpRequest<?>> requestWrapper,
             Publisher<R> responsePublisher) {
-
         if (request instanceof MutableHttpRequest) {
-            ((MutableHttpRequest<I>) request).uri(requestURI);
-
-            List<HttpClientFilter> filters =
-                    filterResolver.resolveFilters(request, clientFilterEntries);
+            PropagatedContext propagatedContext = PropagatedContext.getOrEmpty();
             if (parentRequest != null) {
-                filters.add(new ClientServerContextFilter(parentRequest));
+                propagatedContext = propagatedContext.plus(new ServerHttpRequestContext(parentRequest));
             }
+            try (PropagatedContext.InContext ignore = propagatedContext.propagate()) {
+                ((MutableHttpRequest<I>) request).uri(requestURI);
 
-            OrderUtil.reverseSort(filters);
-            Publisher<R> finalResponsePublisher = responsePublisher;
-            filters.add((req, chain) -> finalResponsePublisher);
+                List<HttpClientFilter> filters = filterResolver.resolveFilters(request, clientFilterEntries);
+                OrderUtil.reverseSort(filters);
+                Publisher<R> finalResponsePublisher = responsePublisher;
+                filters.add((req, chain) -> finalResponsePublisher);
 
-            ClientFilterChain filterChain = buildChain(requestWrapper, filters);
-            if (parentRequest != null) {
-                responsePublisher = ServerRequestContext.with(parentRequest, (Supplier<Publisher<R>>) () -> {
-                    try {
-                        return Flux.from((Publisher<R>) filters.get(0).doFilter(request, filterChain))
-                                .contextWrite(ctx -> ctx.put(ServerRequestContext.KEY, parentRequest));
-                    } catch (Throwable t) {
-                        return Flux.error(t);
-                    }
-                });
-            } else {
+                ClientFilterChain filterChain = buildChain(requestWrapper, filters);
                 try {
                     responsePublisher = (Publisher<R>) filters.get(0).doFilter(request, filterChain);
+                    if (parentRequest != null) {
+                        responsePublisher = Flux.from(responsePublisher)
+                                .contextWrite(ctx -> ctx.put(ServerRequestContext.KEY, parentRequest));
+                    }
                 } catch (Throwable t) {
                     responsePublisher = Flux.error(t);
                 }
+                return ReactivePropagation.propagate(propagatedContext, responsePublisher);
             }
         }
 
@@ -2550,10 +2574,12 @@ public class DefaultHttpClient implements
             Future<V> channelFuture, GenericFutureListener<C> listener
     ) {
         InvocationInstrumenter instrumenter = combineFactories();
-
+        PropagatedContext propagatedContext = PropagatedContext.getOrEmpty();
         return channelFuture.addListener(f -> {
-            try (Instrumentation ignored = instrumenter.newInstrumentation()) {
-                listener.operationComplete((C) f);
+            try (PropagatedContext.InContext ignore = propagatedContext.propagate()) {
+                try (Instrumentation ignored = instrumenter.newInstrumentation()) {
+                    listener.operationComplete((C) f);
+                }
             }
         });
     }

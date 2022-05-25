@@ -18,6 +18,7 @@ package io.micronaut.core.propagation;
 import io.micronaut.core.annotation.Experimental;
 import io.micronaut.core.annotation.NonNull;
 
+import java.util.Optional;
 import java.util.concurrent.Callable;
 
 /**
@@ -43,13 +44,33 @@ public interface PropagatedContext {
     }
 
     /**
+     * Returns the current context or an empty one.
+     *
+     * @return the current context or an empty one
+     */
+    @NonNull
+    static PropagatedContext getOrEmpty() {
+        return PropagatedContextImpl.currentOrEmpty();
+    }
+
+    /**
      * Returns the current context or throws an exception otherwise.
      *
      * @return the current context
      */
     @NonNull
-    static PropagatedContext current() {
-        return PropagatedContextImpl.current();
+    static PropagatedContext get() {
+        return PropagatedContextImpl.get();
+    }
+
+    /**
+     * Returns an optional context.
+     *
+     * @return the current optional context
+     */
+    @NonNull
+    static Optional<PropagatedContext> find() {
+        return PropagatedContextImpl.find();
     }
 
     /**
@@ -62,16 +83,6 @@ public interface PropagatedContext {
     }
 
     /**
-     * Returns the current context or creates a new one.
-     *
-     * @return the current context or a new one
-     */
-    @NonNull
-    static PropagatedContext currentOrNew() {
-        return PropagatedContextImpl.currentOrNew();
-    }
-
-    /**
      * Creates a new context with added element.
      * <p>
      * NOTE: The new context needs to be propagated.
@@ -81,6 +92,24 @@ public interface PropagatedContext {
      */
     @NonNull
     PropagatedContext plus(@NonNull PropagatedContextElement context);
+
+    /**
+     * Finds optional element of type.
+     *
+     * @param elementType The element type
+     * @param <T> The element's type
+     * @return optional element
+     */
+    <T> Optional<T> find(@NonNull Class<T> elementType);
+
+    /**
+     * Gets element of type.
+     *
+     * @param elementType The element type
+     * @param <T> The element's type
+     * @return an element or exception
+     */
+    <T> T get(@NonNull Class<T> elementType);
 
     /**
      * Propagate the context using try-resource block.

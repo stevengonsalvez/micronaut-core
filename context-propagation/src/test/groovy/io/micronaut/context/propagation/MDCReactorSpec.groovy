@@ -170,7 +170,7 @@ class MDCReactorSpec extends Specification {
                 MDC.put("trackingId", trackingId)
                 return Mono.from(
                         ReactivePropagation.propagate(
-                                PropagatedContext.current() + new MdcPropagationContext(),
+                                PropagatedContext.get() + new MdcPropagationContext(),
                                 chain.proceed(request)
                         )
                 ).contextWrite(ctx -> ctx.put("xyz", "abc"))

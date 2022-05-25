@@ -16,6 +16,8 @@
 package io.micronaut.http.context;
 
 import io.micronaut.core.annotation.Experimental;
+import io.micronaut.core.annotation.Nullable;
+import io.micronaut.core.propagation.PropagatedContext;
 import io.micronaut.core.propagation.ThreadPropagatedContextElement;
 import io.micronaut.http.HttpRequest;
 
@@ -26,12 +28,24 @@ import io.micronaut.http.HttpRequest;
  * @since 3.6.0
  */
 @Experimental
-public final class HttpRequestPropagationContext implements ThreadPropagatedContextElement<HttpRequest<?>> {
+public final class ServerHttpRequestContext implements ThreadPropagatedContextElement<HttpRequest<?>> {
 
     private final HttpRequest<?> httpRequest;
 
-    public HttpRequestPropagationContext(HttpRequest<?> httpRequest) {
+    public ServerHttpRequestContext(HttpRequest<?> httpRequest) {
         this.httpRequest = httpRequest;
+    }
+
+    public HttpRequest<?> getHttpRequest() {
+        return httpRequest;
+    }
+
+    @Nullable
+    public static HttpRequest<Object> get() {
+        return (HttpRequest<Object>) PropagatedContext.find()
+                .flatMap(ctx -> ctx.find(ServerHttpRequestContext.class))
+                .map(ServerHttpRequestContext::getHttpRequest)
+                .orElse(null);
     }
 
     @Override

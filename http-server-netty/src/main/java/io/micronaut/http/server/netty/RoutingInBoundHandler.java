@@ -42,7 +42,7 @@ import io.micronaut.http.MutableHttpResponse;
 import io.micronaut.http.annotation.Body;
 import io.micronaut.http.codec.MediaTypeCodec;
 import io.micronaut.http.codec.MediaTypeCodecRegistry;
-import io.micronaut.http.context.HttpRequestPropagationContext;
+import io.micronaut.http.context.ServerHttpRequestContext;
 import io.micronaut.http.context.ServerRequestContext;
 import io.micronaut.http.context.event.HttpRequestTerminatedEvent;
 import io.micronaut.http.multipart.PartData;
@@ -278,16 +278,17 @@ class RoutingInBoundHandler extends SimpleChannelInboundHandler<io.micronaut.htt
             ctx.writeAndFlush(new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.INTERNAL_SERVER_ERROR));
             return;
         }
-        ServerRequestContext.set(nettyHttpRequest);
-        filterAndEncodeResponse(
-                ctx,
-                nettyHttpRequest,
-                routeExecutor.onError(cause, nettyHttpRequest));
+        try (PropagatedContext.InContext ignore = PropagatedContext.newContext(new ServerHttpRequestContext(nettyHttpRequest)).propagate()) {
+            filterAndEncodeResponse(
+                    ctx,
+                    nettyHttpRequest,
+                    routeExecutor.onError(cause, nettyHttpRequest));
+        }
     }
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, io.micronaut.http.HttpRequest<?> request) {
-        try (PropagatedContext.InContext ignore = PropagatedContext.newContext(new HttpRequestPropagationContext(request)).propagate()) {
+        try (PropagatedContext.InContext ignore = PropagatedContext.newContext(new ServerHttpRequestContext(request)).propagate()) {
             ctx.channel().config().setAutoRead(false);
             io.micronaut.http.HttpMethod httpMethod = request.getMethod();
             String requestPath = request.getUri().getPath();
@@ -584,7 +585,7 @@ class RoutingInBoundHandler extends SimpleChannelInboundHandler<io.micronaut.htt
                 nativeRequest instanceof StreamedHttpRequest &&
                 (!bodyArgument.isPresent() || !route.isSatisfied(bodyArgument.get().getName()))) {
             routeMatchPublisher = Mono.<RouteMatch<?>>create(emitter -> httpContentProcessorResolver.resolve(request, route)
-                    .subscribe(ReactivePropagation.propagate(PropagatedContext.current(), buildSubscriber(request, route, emitter)))
+                    .subscribe(ReactivePropagation.propagate(PropagatedContext.get(), buildSubscriber(request, route, emitter)))
             ).flux();
         } else {
             context.read();

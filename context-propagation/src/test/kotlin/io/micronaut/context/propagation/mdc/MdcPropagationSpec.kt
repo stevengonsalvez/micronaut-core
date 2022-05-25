@@ -138,7 +138,7 @@ class HttpApplicationEnterFilter : HttpServerFilter {
 
         return Mono.from(
                 ReactivePropagation.propagate(
-                        PropagatedContext.currentOrNew() + MdcPropagationContext(),
+                        PropagatedContext.getOrEmpty() + MdcPropagationContext(),
                         chain.proceed(request)
                 )
         ).doOnNext {

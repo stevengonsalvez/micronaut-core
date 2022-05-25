@@ -17,6 +17,7 @@ package io.micronaut.http.server.netty.websocket;
 
 import io.micronaut.core.annotation.Internal;
 import io.micronaut.core.annotation.NonNull;
+import io.micronaut.core.propagation.PropagatedContext;
 import io.micronaut.core.util.StringUtils;
 import io.micronaut.http.HttpAttributes;
 import io.micronaut.http.HttpMethod;
@@ -27,6 +28,7 @@ import io.micronaut.http.MutableHttpHeaders;
 import io.micronaut.http.MutableHttpResponse;
 import io.micronaut.http.bind.RequestBinderRegistry;
 import io.micronaut.http.codec.MediaTypeCodecRegistry;
+import io.micronaut.http.context.ServerHttpRequestContext;
 import io.micronaut.http.context.ServerRequestContext;
 import io.micronaut.http.exceptions.HttpStatusException;
 import io.micronaut.http.netty.NettyHttpHeaders;
@@ -132,75 +134,75 @@ public class NettyServerWebSocketUpgradeHandler extends SimpleChannelInboundHand
 
     @Override
     protected final void channelRead0(ChannelHandlerContext ctx, NettyHttpRequest<?> msg) {
-        ServerRequestContext.set(msg);
+        try (PropagatedContext.InContext ignore = PropagatedContext.newContext(new ServerHttpRequestContext(msg)).propagate()) {
 
-        Optional<UriRouteMatch<Object, Object>> optionalRoute = router.find(HttpMethod.GET, msg.getUri().toString(), msg)
-                .filter(rm -> rm.isAnnotationPresent(OnMessage.class) || rm.isAnnotationPresent(OnOpen.class))
-                .findFirst();
+            Optional<UriRouteMatch<Object, Object>> optionalRoute = router.find(HttpMethod.GET, msg.getUri().toString(), msg)
+                    .filter(rm -> rm.isAnnotationPresent(OnMessage.class) || rm.isAnnotationPresent(OnOpen.class))
+                    .findFirst();
 
-        MutableHttpResponse<?> proceed = HttpResponse.ok();
-        AtomicReference<HttpRequest<?>> requestReference = new AtomicReference<>(msg);
+            MutableHttpResponse<?> proceed = HttpResponse.ok();
+            AtomicReference<HttpRequest<?>> requestReference = new AtomicReference<>(msg);
 
-        Flux<MutableHttpResponse<?>> responsePublisher;
-        if (optionalRoute.isPresent()) {
-            UriRouteMatch<Object, Object> rm = optionalRoute.get();
-            msg.setAttribute(HttpAttributes.ROUTE_MATCH, rm);
-            msg.setAttribute(HttpAttributes.ROUTE_INFO, rm);
-            proceed.setAttribute(HttpAttributes.ROUTE_MATCH, rm);
-            proceed.setAttribute(HttpAttributes.ROUTE_INFO, rm);
-            responsePublisher = Flux.just(proceed);
-        } else {
-            responsePublisher = routeExecutor.onError(new HttpStatusException(HttpStatus.NOT_FOUND, "WebSocket Not Found"), msg);
-        }
+            Flux<MutableHttpResponse<?>> responsePublisher;
+            if (optionalRoute.isPresent()) {
+                UriRouteMatch<Object, Object> rm = optionalRoute.get();
+                msg.setAttribute(HttpAttributes.ROUTE_MATCH, rm);
+                msg.setAttribute(HttpAttributes.ROUTE_INFO, rm);
+                proceed.setAttribute(HttpAttributes.ROUTE_MATCH, rm);
+                proceed.setAttribute(HttpAttributes.ROUTE_INFO, rm);
+                responsePublisher = Flux.just(proceed);
+            } else {
+                responsePublisher = routeExecutor.onError(new HttpStatusException(HttpStatus.NOT_FOUND, "WebSocket Not Found"), msg);
+            }
 
-        Publisher<? extends MutableHttpResponse<?>> finalPublisher = routeExecutor.filterPublisher(requestReference, responsePublisher);
+            Publisher<? extends MutableHttpResponse<?>> finalPublisher = routeExecutor.filterPublisher(requestReference, responsePublisher);
 
-        final Scheduler scheduler = Schedulers.fromExecutorService(ctx.channel().eventLoop());
-        Mono.from(finalPublisher)
-                .publishOn(scheduler)
-                .subscribeOn(scheduler)
-                .contextWrite(reactorContext -> reactorContext.put(ServerRequestContext.KEY, requestReference.get()))
-                .subscribe((Consumer<MutableHttpResponse<?>>) actualResponse -> {
-                    if (actualResponse == proceed) {
-                        UriRouteMatch routeMatch = actualResponse.getAttribute(HttpAttributes.ROUTE_MATCH, UriRouteMatch.class).get();
-                        //Adding new handler to the existing pipeline to handle WebSocket Messages
-                        WebSocketBean<?> webSocketBean = webSocketBeanRegistry.getWebSocket(routeMatch.getTarget().getClass());
+            final Scheduler scheduler = Schedulers.fromExecutorService(ctx.channel().eventLoop());
+            Mono.from(finalPublisher)
+                    .publishOn(scheduler)
+                    .subscribeOn(scheduler)
+                    .contextWrite(reactorContext -> reactorContext.put(ServerRequestContext.KEY, requestReference.get()))
+                    .subscribe((Consumer<MutableHttpResponse<?>>) actualResponse -> {
+                        if (actualResponse == proceed) {
+                            UriRouteMatch routeMatch = actualResponse.getAttribute(HttpAttributes.ROUTE_MATCH, UriRouteMatch.class).get();
+                            //Adding new handler to the existing pipeline to handle WebSocket Messages
+                            WebSocketBean<?> webSocketBean = webSocketBeanRegistry.getWebSocket(routeMatch.getTarget().getClass());
 
-                        handleHandshake(ctx, msg, webSocketBean, actualResponse);
+                            handleHandshake(ctx, msg, webSocketBean, actualResponse);
 
-                        ChannelPipeline pipeline = ctx.pipeline();
+                            ChannelPipeline pipeline = ctx.pipeline();
 
-                        try {
-                            // re-configure the pipeline
-                            NettyServerWebSocketHandler webSocketHandler = new NettyServerWebSocketHandler(
-                                    nettyEmbeddedServices,
-                                    webSocketSessionRepository,
-                                    handshaker,
-                                    webSocketBean,
-                                    msg,
-                                    routeMatch,
-                                    ctx,
-                                    routeExecutor.getCoroutineHelper().orElse(null));
-                            pipeline.addBefore(ctx.name(), NettyServerWebSocketHandler.ID, webSocketHandler);
+                            try {
+                                // re-configure the pipeline
+                                NettyServerWebSocketHandler webSocketHandler = new NettyServerWebSocketHandler(
+                                        nettyEmbeddedServices,
+                                        webSocketSessionRepository,
+                                        handshaker,
+                                        webSocketBean,
+                                        msg,
+                                        routeMatch,
+                                        ctx,
+                                        routeExecutor.getCoroutineHelper().orElse(null));
+                                pipeline.addBefore(ctx.name(), NettyServerWebSocketHandler.ID, webSocketHandler);
 
-                            pipeline.remove(ChannelPipelineCustomizer.HANDLER_HTTP_STREAM);
-                            pipeline.remove(NettyServerWebSocketUpgradeHandler.this);
-                            ChannelHandler accessLoggerHandler = pipeline.get(ChannelPipelineCustomizer.HANDLER_ACCESS_LOGGER);
-                            if (accessLoggerHandler !=  null) {
-                                pipeline.remove(accessLoggerHandler);
+                                pipeline.remove(ChannelPipelineCustomizer.HANDLER_HTTP_STREAM);
+                                pipeline.remove(NettyServerWebSocketUpgradeHandler.this);
+                                ChannelHandler accessLoggerHandler = pipeline.get(ChannelPipelineCustomizer.HANDLER_ACCESS_LOGGER);
+                                if (accessLoggerHandler != null) {
+                                    pipeline.remove(accessLoggerHandler);
+                                }
+
+                            } catch (Throwable e) {
+                                if (LOG.isErrorEnabled()) {
+                                    LOG.error("Error opening WebSocket: " + e.getMessage(), e);
+                                }
+                                ctx.writeAndFlush(new CloseWebSocketFrame(CloseReason.INTERNAL_ERROR.getCode(), CloseReason.INTERNAL_ERROR.getReason()));
                             }
-
-                        } catch (Throwable e) {
-                            if (LOG.isErrorEnabled()) {
-                                LOG.error("Error opening WebSocket: " + e.getMessage(), e);
-                            }
-                            ctx.writeAndFlush(new CloseWebSocketFrame(CloseReason.INTERNAL_ERROR.getCode(), CloseReason.INTERNAL_ERROR.getReason()));
+                        } else {
+                            ctx.writeAndFlush(actualResponse);
                         }
-                    } else {
-                        ctx.writeAndFlush(actualResponse);
-                    }
-                });
-
+                    });
+        }
     }
 
     /**

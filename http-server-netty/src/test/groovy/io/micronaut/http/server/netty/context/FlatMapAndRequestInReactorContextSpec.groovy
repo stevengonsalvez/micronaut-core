@@ -8,7 +8,7 @@ import io.micronaut.core.annotation.Introspected
 import io.micronaut.core.annotation.NonNull
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.core.async.annotation.SingleResult
-import io.micronaut.core.io.socket.SocketUtils
+import io.micronaut.core.propagation.PropagatedContext
 import io.micronaut.core.type.Argument
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.HttpResponse
@@ -20,6 +20,7 @@ import io.micronaut.http.annotation.Header
 import io.micronaut.http.client.BlockingHttpClient
 import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
+import io.micronaut.http.context.ServerHttpRequestContext
 import io.micronaut.http.context.ServerRequestContext
 import io.micronaut.http.filter.ClientFilterChain
 import io.micronaut.http.filter.HttpClientFilter
@@ -32,10 +33,10 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import reactor.core.publisher.Flux
 import spock.lang.AutoCleanup
-import spock.lang.PendingFeature
 import spock.lang.Shared
 import spock.lang.Specification
 import spock.lang.Unroll
+
 import javax.validation.constraints.NotBlank
 import java.util.stream.Stream
 
@@ -176,15 +177,21 @@ class FlatMapAndRequestInReactorContextSpec extends Specification {
         }
 
         private Stream<BookRecommendation> blockingrecommendations() {
+            PropagatedContext.get().get(ServerHttpRequestContext)
             bookCatalogueClient.findAllBlocking()
                     .stream()
-                    .filter(b -> bookInventoryClient.stockBlocking(b.isbn).stock > 0)
+                    .filter(b -> {
+                        PropagatedContext.get().get(ServerHttpRequestContext)
+                        bookInventoryClient.stockBlocking(b.isbn).stock > 0
+                    })
                     .map(b -> new BookRecommendation(name: b.name))
         }
 
         private Flux<BookRecommendation> recommendations() {
+            PropagatedContext.get().get(ServerHttpRequestContext)
             Flux.from(bookCatalogueClient.findAll())
                 .flatMap(b -> {
+                    PropagatedContext.get().get(ServerHttpRequestContext)
                     Flux.from(bookInventoryClient.stock(b.isbn))
                             .filter(bi -> bi.stock > 0)
                             .map(bi -> b)
@@ -225,6 +232,7 @@ class FlatMapAndRequestInReactorContextSpec extends Specification {
 
         @Get("/stock/{isbn}")
         BookInventory stock(String isbn, @Nullable @Header("FOOBAR") String stocklevel) {
+            PropagatedContext.get().get(ServerHttpRequestContext)
             new BookInventory(isbn: isbn, stock: (stocklevel == '/four' || stocklevel == '/fourblocking' ? 4 : 0))
         }
     }

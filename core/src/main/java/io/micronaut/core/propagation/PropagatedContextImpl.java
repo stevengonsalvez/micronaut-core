@@ -23,6 +23,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Optional;
 
 /**
  * The implementation of {@link PropagatedContext}.
@@ -76,7 +78,7 @@ final class PropagatedContextImpl implements PropagatedContext {
         return !propagatedContext.elements.isEmpty();
     }
 
-    public static PropagatedContextImpl current() {
+    public static PropagatedContextImpl get() {
         PropagatedContextImpl propagatedContext = PropagatedContextImpl.THREAD_CONTEXT.get();
         if (propagatedContext == null) {
             throw new IllegalStateException("No active context!");
@@ -84,12 +86,19 @@ final class PropagatedContextImpl implements PropagatedContext {
         return propagatedContext;
     }
 
-    @NonNull
-    public static PropagatedContextImpl currentOrNew() {
+    public static Optional<PropagatedContext> find() {
         PropagatedContextImpl propagatedContext = PropagatedContextImpl.THREAD_CONTEXT.get();
         if (propagatedContext == null) {
-            propagatedContext = EMPTY;
-            PropagatedContextImpl.THREAD_CONTEXT.set(propagatedContext);
+            return Optional.empty();
+        }
+        return Optional.of(propagatedContext);
+    }
+
+    @NonNull
+    public static PropagatedContextImpl currentOrEmpty() {
+        PropagatedContextImpl propagatedContext = PropagatedContextImpl.THREAD_CONTEXT.get();
+        if (propagatedContext == null) {
+            return EMPTY;
         }
         return propagatedContext;
     }
@@ -99,6 +108,29 @@ final class PropagatedContextImpl implements PropagatedContext {
         newElements.addAll(elements);
         newElements.add(element);
         return new PropagatedContextImpl(Collections.unmodifiableList(newElements));
+    }
+
+    @Override
+    public <T> Optional<T> find(Class<T> elementType) {
+        return Optional.ofNullable(findElement(elementType));
+    }
+
+    @Override
+    public <T> T get(Class<T> elementType) {
+        T element = findElement(elementType);
+        if (element == null) {
+            throw new NoSuchElementException();
+        }
+        return element;
+    }
+
+    public <T> T findElement(Class<T> elementType) {
+        for (PropagatedContextElement element : elements) {
+            if (elementType.isInstance(element)) {
+                return (T) element;
+            }
+        }
+        return null;
     }
 
     @Override

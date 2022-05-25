@@ -145,7 +145,7 @@ final class KotlinInterceptedMethod implements io.micronaut.aop.kotlin.KotlinInt
         if (PropagatedContext.exists()) {
             updateCoroutineContext(getCoroutineContext()
                     .minusKey(MicronautPropagatedContext.Key)
-                    .plus(new MicronautPropagatedContext(PropagatedContext.current()))
+                    .plus(new MicronautPropagatedContext(PropagatedContext.get()))
             );
         }
         return KotlinInterceptedMethodHelper.handleResult(completionStageResult, isUnitValueType, continuation);

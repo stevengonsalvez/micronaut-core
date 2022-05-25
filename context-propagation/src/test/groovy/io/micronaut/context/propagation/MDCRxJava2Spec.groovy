@@ -176,7 +176,7 @@ class MDCRxJava2Spec extends Specification {
                 MDC.put("trackingId", trackingId)
                 return Mono.from(
                         ReactivePropagation.propagate(
-                                PropagatedContext.current() + new MdcPropagationContext(),
+                                PropagatedContext.get() + new MdcPropagationContext(),
                                 chain.proceed(request)
                         )
                 )
@@ -194,7 +194,7 @@ class MDCRxJava2Spec extends Specification {
         Publisher<? extends HttpResponse<?>> doFilter(MutableHttpRequest<?> request,
                                                       ClientFilterChain chain) {
             checkTracing(request)
-            PropagatedContext.current()
+            PropagatedContext.get()
             return Mono.from(chain.proceed(request))
         }
 

@@ -93,7 +93,7 @@ class MDCSpec extends Specification {
 
             try {
                 return ReactivePropagation.propagate(
-                        PropagatedContext.current() + new MdcPropagationContext(),
+                        PropagatedContext.get() + new MdcPropagationContext(),
                         chain.proceed(request)
                 )
             } finally {

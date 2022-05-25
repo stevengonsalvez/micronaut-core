@@ -23,9 +23,7 @@ import io.micronaut.core.propagation.PropagatedContext
 import io.micronaut.core.reflect.ClassUtils
 import io.micronaut.core.type.Argument
 import io.micronaut.http.HttpRequest
-import io.micronaut.http.context.ServerRequestContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ThreadContextElement
 import kotlinx.coroutines.reactor.ReactorContext
 import reactor.util.context.ContextView
 import java.util.*
@@ -69,7 +67,7 @@ class ContinuationArgumentBinder : TypedRequestArgumentBinder<Continuation<*>> {
             if (customContinuation != null) {
                 var coroutineContext: CoroutineContext = Dispatchers.Default
                 if (PropagatedContext.exists()) {
-                    coroutineContext += MicronautPropagatedContext(PropagatedContext.current())
+                    coroutineContext += MicronautPropagatedContext(PropagatedContext.get())
                 }
                 if (reactorContextPresent) {
                     coroutineContext += propagateReactorContext(contextView)
