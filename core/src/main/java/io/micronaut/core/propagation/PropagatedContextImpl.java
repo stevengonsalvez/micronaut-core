@@ -79,7 +79,7 @@ final class PropagatedContextImpl implements PropagatedContext {
     }
 
     public static PropagatedContextImpl get() {
-        PropagatedContextImpl propagatedContext = PropagatedContextImpl.THREAD_CONTEXT.get();
+        PropagatedContextImpl propagatedContext = THREAD_CONTEXT.get();
         if (propagatedContext == null) {
             throw new IllegalStateException("No active context!");
         }
@@ -87,7 +87,7 @@ final class PropagatedContextImpl implements PropagatedContext {
     }
 
     public static Optional<PropagatedContext> find() {
-        PropagatedContextImpl propagatedContext = PropagatedContextImpl.THREAD_CONTEXT.get();
+        PropagatedContextImpl propagatedContext = THREAD_CONTEXT.get();
         if (propagatedContext == null) {
             return Optional.empty();
         }
@@ -95,8 +95,8 @@ final class PropagatedContextImpl implements PropagatedContext {
     }
 
     @NonNull
-    public static PropagatedContextImpl currentOrEmpty() {
-        PropagatedContextImpl propagatedContext = PropagatedContextImpl.THREAD_CONTEXT.get();
+    public static PropagatedContextImpl getOrEmpty() {
+        PropagatedContextImpl propagatedContext = THREAD_CONTEXT.get();
         if (propagatedContext == null) {
             return EMPTY;
         }

@@ -17,7 +17,6 @@ package io.micronaut.http.server.netty;
 
 import io.micronaut.buffer.netty.NettyByteBufferFactory;
 import io.micronaut.context.event.ApplicationEventPublisher;
-import io.micronaut.core.propagation.PropagatedContext;
 import io.micronaut.core.annotation.Internal;
 import io.micronaut.core.annotation.NonNull;
 import io.micronaut.core.annotation.Nullable;
@@ -27,6 +26,7 @@ import io.micronaut.core.convert.ConversionService;
 import io.micronaut.core.io.Writable;
 import io.micronaut.core.io.buffer.ByteBuffer;
 import io.micronaut.core.io.buffer.ReferenceCounted;
+import io.micronaut.core.propagation.PropagatedContext;
 import io.micronaut.core.reflect.ClassUtils;
 import io.micronaut.core.type.Argument;
 import io.micronaut.core.util.CollectionUtils;
@@ -584,8 +584,11 @@ class RoutingInBoundHandler extends SimpleChannelInboundHandler<io.micronaut.htt
                 io.micronaut.http.HttpMethod.permitsRequestBody(request.getMethod()) &&
                 nativeRequest instanceof StreamedHttpRequest &&
                 (!bodyArgument.isPresent() || !route.isSatisfied(bodyArgument.get().getName()))) {
-            routeMatchPublisher = Mono.<RouteMatch<?>>create(emitter -> httpContentProcessorResolver.resolve(request, route)
-                    .subscribe(ReactivePropagation.propagate(PropagatedContext.get(), buildSubscriber(request, route, emitter)))
+            PropagatedContext propagatedContext = PropagatedContext.get();
+            routeMatchPublisher = Mono.<RouteMatch<?>>create(emitter -> {
+                        httpContentProcessorResolver.resolve(request, route)
+                                .subscribe(ReactivePropagation.propagate(propagatedContext, buildSubscriber(request, route, emitter)));
+                    }
             ).flux();
         } else {
             context.read();

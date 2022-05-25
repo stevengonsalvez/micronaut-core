@@ -50,7 +50,7 @@ public interface PropagatedContext {
      */
     @NonNull
     static PropagatedContext getOrEmpty() {
-        return PropagatedContextImpl.currentOrEmpty();
+        return PropagatedContextImpl.getOrEmpty();
     }
 
     /**
