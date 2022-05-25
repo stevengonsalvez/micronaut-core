@@ -17,6 +17,7 @@ package io.micronaut.http.server.netty;
 
 import io.micronaut.buffer.netty.NettyByteBufferFactory;
 import io.micronaut.context.event.ApplicationEventPublisher;
+import io.micronaut.core.propagation.PropagatedContext;
 import io.micronaut.core.annotation.Internal;
 import io.micronaut.core.annotation.NonNull;
 import io.micronaut.core.annotation.Nullable;
@@ -41,6 +42,7 @@ import io.micronaut.http.MutableHttpResponse;
 import io.micronaut.http.annotation.Body;
 import io.micronaut.http.codec.MediaTypeCodec;
 import io.micronaut.http.codec.MediaTypeCodecRegistry;
+import io.micronaut.http.context.HttpRequestPropagationContext;
 import io.micronaut.http.context.ServerRequestContext;
 import io.micronaut.http.context.event.HttpRequestTerminatedEvent;
 import io.micronaut.http.multipart.PartData;
@@ -64,6 +66,7 @@ import io.micronaut.http.server.netty.types.NettyCustomizableResponseTypeHandler
 import io.micronaut.http.server.netty.types.files.NettyStreamedFileCustomizableResponseType;
 import io.micronaut.http.server.netty.types.files.NettySystemFileCustomizableResponseType;
 import io.micronaut.http.server.types.files.FileCustomizableResponseType;
+import io.micronaut.reactive.ReactivePropagation;
 import io.micronaut.runtime.http.codec.TextPlainCodec;
 import io.micronaut.web.router.MethodBasedRouteMatch;
 import io.micronaut.web.router.RouteInfo;
@@ -284,111 +287,39 @@ class RoutingInBoundHandler extends SimpleChannelInboundHandler<io.micronaut.htt
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, io.micronaut.http.HttpRequest<?> request) {
-        ctx.channel().config().setAutoRead(false);
-        io.micronaut.http.HttpMethod httpMethod = request.getMethod();
-        String requestPath = request.getUri().getPath();
-        ServerRequestContext.set(request);
+        try (PropagatedContext.InContext ignore = PropagatedContext.newContext(new HttpRequestPropagationContext(request)).propagate()) {
+            ctx.channel().config().setAutoRead(false);
+            io.micronaut.http.HttpMethod httpMethod = request.getMethod();
+            String requestPath = request.getUri().getPath();
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Request {} {}", httpMethod, request.getUri());
-        }
-
-        NettyHttpRequest nettyHttpRequest = (NettyHttpRequest) request;
-        io.netty.handler.codec.http.HttpRequest nativeRequest = nettyHttpRequest.getNativeRequest();
-        // handle decoding failure
-        DecoderResult decoderResult = nativeRequest.decoderResult();
-        if (decoderResult.isFailure()) {
-            Throwable cause = decoderResult.cause();
-            HttpStatus status = cause instanceof TooLongFrameException ? HttpStatus.REQUEST_ENTITY_TOO_LARGE : HttpStatus.BAD_REQUEST;
-            handleStatusError(
-                    ctx,
-                    nettyHttpRequest,
-                    HttpResponse.status(status),
-                    status.getReason()
-            );
-            return;
-        }
-
-        MediaType contentType = request.getContentType().orElse(null);
-        final String requestMethodName = request.getMethodName();
-
-        if (!multipartEnabled &&
-                contentType != null &&
-                contentType.equals(MediaType.MULTIPART_FORM_DATA_TYPE)) {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Multipart uploads have been disabled via configuration. Rejected request for URI {}, method {}, and content type {}", request.getUri(),
-                        requestMethodName, contentType);
+                LOG.debug("Request {} {}", httpMethod, request.getUri());
             }
 
-            handleStatusError(
-                    ctx,
-                    nettyHttpRequest,
-                    HttpResponse.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE),
-                    "Content Type [" + contentType + "] not allowed");
-            return;
-        }
-
-        UriRouteMatch<Object, Object> routeMatch = null;
-
-        List<UriRouteMatch<Object, Object>> uriRoutes = router.findAllClosest(request);
-
-        if (uriRoutes.size() > 1) {
-            throw new DuplicateRouteException(requestPath, uriRoutes);
-        } else if (uriRoutes.size() == 1) {
-            routeMatch = uriRoutes.get(0);
-            setRouteAttributes(request, routeMatch);
-        }
-
-        if (routeMatch == null && request.getMethod().equals(HttpMethod.OPTIONS)) {
-            List<UriRouteMatch<Object, Object>> anyUriRoutes = router.findAny(request.getUri().toString(), request)
-                    .collect(Collectors.toList());
-            if (!anyUriRoutes.isEmpty()) {
-                setRouteAttributes(request, anyUriRoutes.get(0));
-            }
-        }
-
-        RouteMatch<?> route;
-
-        if (routeMatch == null) {
-
-            //Check if there is a file for the route before returning route not found
-            Optional<? extends FileCustomizableResponseType> optionalFile = matchFile(requestPath);
-
-            if (optionalFile.isPresent()) {
-                filterAndEncodeResponse(ctx, nettyHttpRequest, Flux.just(HttpResponse.ok(optionalFile.get())));
+            NettyHttpRequest nettyHttpRequest = (NettyHttpRequest) request;
+            io.netty.handler.codec.http.HttpRequest nativeRequest = nettyHttpRequest.getNativeRequest();
+            // handle decoding failure
+            DecoderResult decoderResult = nativeRequest.decoderResult();
+            if (decoderResult.isFailure()) {
+                Throwable cause = decoderResult.cause();
+                HttpStatus status = cause instanceof TooLongFrameException ? HttpStatus.REQUEST_ENTITY_TOO_LARGE : HttpStatus.BAD_REQUEST;
+                handleStatusError(
+                        ctx,
+                        nettyHttpRequest,
+                        HttpResponse.status(status),
+                        status.getReason()
+                );
                 return;
             }
 
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("No matching route: {} {}", httpMethod, request.getUri());
-            }
+            MediaType contentType = request.getContentType().orElse(null);
+            final String requestMethodName = request.getMethodName();
 
-            // if there is no route present try to locate a route that matches a different HTTP method
-            final List<UriRouteMatch<?, ?>> anyMatchingRoutes = router
-                    .findAny(request.getUri().toString(), request)
-                    .collect(Collectors.toList());
-            final Collection<MediaType> acceptedTypes = request.accept();
-            final boolean hasAcceptHeader = CollectionUtils.isNotEmpty(acceptedTypes);
-
-            Set<MediaType> acceptableContentTypes = contentType != null ? new HashSet<>(5) : null;
-            Set<String> allowedMethods = new HashSet<>(5);
-            Set<MediaType> produceableContentTypes = hasAcceptHeader ? new HashSet<>(5) : null;
-            for (UriRouteMatch<?, ?> anyRoute : anyMatchingRoutes) {
-                final String routeMethod = anyRoute.getRoute().getHttpMethodName();
-                if (!requestMethodName.equals(routeMethod)) {
-                    allowedMethods.add(routeMethod);
-                }
-                if (contentType != null && !anyRoute.doesConsume(contentType)) {
-                    acceptableContentTypes.addAll(anyRoute.getRoute().getConsumes());
-                }
-                if (hasAcceptHeader && !anyRoute.doesProduce(acceptedTypes)) {
-                    produceableContentTypes.addAll(anyRoute.getRoute().getProduces());
-                }
-            }
-
-            if (CollectionUtils.isNotEmpty(acceptableContentTypes)) {
+            if (!multipartEnabled &&
+                    contentType != null &&
+                    contentType.equals(MediaType.MULTIPART_FORM_DATA_TYPE)) {
                 if (LOG.isDebugEnabled()) {
-                    LOG.debug("Content type not allowed for URI {}, method {}, and content type {}", request.getUri(),
+                    LOG.debug("Multipart uploads have been disabled via configuration. Rejected request for URI {}, method {}, and content type {}", request.getUri(),
                             requestMethodName, contentType);
                 }
 
@@ -396,61 +327,134 @@ class RoutingInBoundHandler extends SimpleChannelInboundHandler<io.micronaut.htt
                         ctx,
                         nettyHttpRequest,
                         HttpResponse.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE),
-                        "Content Type [" + contentType + "] not allowed. Allowed types: " + acceptableContentTypes);
+                        "Content Type [" + contentType + "] not allowed");
                 return;
             }
 
-            if (CollectionUtils.isNotEmpty(produceableContentTypes)) {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("Content type not allowed for URI {}, method {}, and content type {}", request.getUri(),
-                            requestMethodName, contentType);
+            UriRouteMatch<Object, Object> routeMatch = null;
+
+            List<UriRouteMatch<Object, Object>> uriRoutes = router.findAllClosest(request);
+
+            if (uriRoutes.size() > 1) {
+                throw new DuplicateRouteException(requestPath, uriRoutes);
+            } else if (uriRoutes.size() == 1) {
+                routeMatch = uriRoutes.get(0);
+                setRouteAttributes(request, routeMatch);
+            }
+
+            if (routeMatch == null && request.getMethod().equals(HttpMethod.OPTIONS)) {
+                List<UriRouteMatch<Object, Object>> anyUriRoutes = router.findAny(request.getUri().toString(), request)
+                        .collect(Collectors.toList());
+                if (!anyUriRoutes.isEmpty()) {
+                    setRouteAttributes(request, anyUriRoutes.get(0));
+                }
+            }
+
+            RouteMatch<?> route;
+
+            if (routeMatch == null) {
+
+                //Check if there is a file for the route before returning route not found
+                Optional<? extends FileCustomizableResponseType> optionalFile = matchFile(requestPath);
+
+                if (optionalFile.isPresent()) {
+                    filterAndEncodeResponse(ctx, nettyHttpRequest, Flux.just(HttpResponse.ok(optionalFile.get())));
+                    return;
                 }
 
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("No matching route: {} {}", httpMethod, request.getUri());
+                }
+
+                // if there is no route present try to locate a route that matches a different HTTP method
+                final List<UriRouteMatch<?, ?>> anyMatchingRoutes = router
+                        .findAny(request.getUri().toString(), request)
+                        .collect(Collectors.toList());
+                final Collection<MediaType> acceptedTypes = request.accept();
+                final boolean hasAcceptHeader = CollectionUtils.isNotEmpty(acceptedTypes);
+
+                Set<MediaType> acceptableContentTypes = contentType != null ? new HashSet<>(5) : null;
+                Set<String> allowedMethods = new HashSet<>(5);
+                Set<MediaType> produceableContentTypes = hasAcceptHeader ? new HashSet<>(5) : null;
+                for (UriRouteMatch<?, ?> anyRoute : anyMatchingRoutes) {
+                    final String routeMethod = anyRoute.getRoute().getHttpMethodName();
+                    if (!requestMethodName.equals(routeMethod)) {
+                        allowedMethods.add(routeMethod);
+                    }
+                    if (contentType != null && !anyRoute.doesConsume(contentType)) {
+                        acceptableContentTypes.addAll(anyRoute.getRoute().getConsumes());
+                    }
+                    if (hasAcceptHeader && !anyRoute.doesProduce(acceptedTypes)) {
+                        produceableContentTypes.addAll(anyRoute.getRoute().getProduces());
+                    }
+                }
+
+                if (CollectionUtils.isNotEmpty(acceptableContentTypes)) {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("Content type not allowed for URI {}, method {}, and content type {}", request.getUri(),
+                                requestMethodName, contentType);
+                    }
+
+                    handleStatusError(
+                            ctx,
+                            nettyHttpRequest,
+                            HttpResponse.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE),
+                            "Content Type [" + contentType + "] not allowed. Allowed types: " + acceptableContentTypes);
+                    return;
+                }
+
+                if (CollectionUtils.isNotEmpty(produceableContentTypes)) {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("Content type not allowed for URI {}, method {}, and content type {}", request.getUri(),
+                                requestMethodName, contentType);
+                    }
+
+                    handleStatusError(
+                            ctx,
+                            nettyHttpRequest,
+                            HttpResponse.status(HttpStatus.NOT_ACCEPTABLE),
+                            "Specified Accept Types " + acceptedTypes + " not supported. Supported types: " + produceableContentTypes);
+                    return;
+                }
+
+                if (!allowedMethods.isEmpty()) {
+
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("Method not allowed for URI {} and method {}", request.getUri(), requestMethodName);
+                    }
+
+                    handleStatusError(
+                            ctx,
+                            nettyHttpRequest,
+                            HttpResponse.notAllowedGeneric(allowedMethods),
+                            "Method [" + requestMethodName + "] not allowed for URI [" + request.getUri() + "]. Allowed methods: " + allowedMethods);
+                    return;
+                } else {
+                    handleStatusError(ctx, nettyHttpRequest, HttpResponse.status(HttpStatus.NOT_FOUND), "Page Not Found");
+                }
+                return;
+
+            } else {
+                route = routeMatch;
+            }
+
+            if (LOG.isTraceEnabled()) {
+                if (route instanceof MethodBasedRouteMatch) {
+                    LOG.trace("Matched route {} - {} to controller {}", requestMethodName, requestPath, route.getDeclaringType());
+                } else {
+                    LOG.trace("Matched route {} - {}", requestMethodName, requestPath);
+                }
+            }
+            // all ok proceed to try and execute the route
+            if (route.isWebSocketRoute()) {
                 handleStatusError(
                         ctx,
                         nettyHttpRequest,
-                        HttpResponse.status(HttpStatus.NOT_ACCEPTABLE),
-                        "Specified Accept Types " + acceptedTypes + " not supported. Supported types: " + produceableContentTypes);
-                return;
-            }
-
-            if (!allowedMethods.isEmpty()) {
-
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("Method not allowed for URI {} and method {}", request.getUri(), requestMethodName);
-                }
-
-                handleStatusError(
-                        ctx,
-                        nettyHttpRequest,
-                        HttpResponse.notAllowedGeneric(allowedMethods),
-                        "Method [" + requestMethodName + "] not allowed for URI [" + request.getUri() + "]. Allowed methods: " + allowedMethods);
-                return;
+                        HttpResponse.status(HttpStatus.BAD_REQUEST),
+                        "Not a WebSocket request");
             } else {
-                handleStatusError(ctx, nettyHttpRequest, HttpResponse.status(HttpStatus.NOT_FOUND), "Page Not Found");
+                handleRouteMatch(route, nettyHttpRequest, ctx);
             }
-            return;
-
-        } else {
-            route = routeMatch;
-        }
-
-        if (LOG.isTraceEnabled()) {
-            if (route instanceof MethodBasedRouteMatch) {
-                LOG.trace("Matched route {} - {} to controller {}", requestMethodName, requestPath, route.getDeclaringType());
-            } else {
-                LOG.trace("Matched route {} - {}", requestMethodName, requestPath);
-            }
-        }
-        // all ok proceed to try and execute the route
-        if (route.isWebSocketRoute()) {
-            handleStatusError(
-                    ctx,
-                    nettyHttpRequest,
-                    HttpResponse.status(HttpStatus.BAD_REQUEST),
-                    "Not a WebSocket request");
-        } else {
-            handleRouteMatch(route, nettyHttpRequest, ctx);
         }
     }
 
@@ -580,7 +584,7 @@ class RoutingInBoundHandler extends SimpleChannelInboundHandler<io.micronaut.htt
                 nativeRequest instanceof StreamedHttpRequest &&
                 (!bodyArgument.isPresent() || !route.isSatisfied(bodyArgument.get().getName()))) {
             routeMatchPublisher = Mono.<RouteMatch<?>>create(emitter -> httpContentProcessorResolver.resolve(request, route)
-                    .subscribe(buildSubscriber(request, route, emitter))
+                    .subscribe(ReactivePropagation.propagate(PropagatedContext.current(), buildSubscriber(request, route, emitter)))
             ).flux();
         } else {
             context.read();

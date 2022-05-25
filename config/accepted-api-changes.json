@@ -148,5 +148,51 @@
         "type": "io.micronaut.context.annotation.Replaces",
         "member": "Method io.micronaut.context.annotation.Replaces.qualifier()",
         "reason": "Improvement of the API"
+    },
+    {
+        "type": "io.micronaut.http.bind.binders.ServerRequestScopeHandler$Key",
+        "member": "Class io.micronaut.http.bind.binders.ServerRequestScopeHandler$Key",
+        "reason": "Internal"
+    },
+    {
+        "type": "io.micronaut.http.bind.binders.ServerRequestScopeHandler$Key",
+        "member": "Constructor io.micronaut.http.bind.binders.ServerRequestScopeHandler$Key(kotlin.jvm.internal.DefaultConstructorMarker)",
+        "reason": "Internal"
+    },
+    {
+        "type": "io.micronaut.http.bind.binders.ServerRequestScopeHandler$Key",
+        "member": "Implemented interface kotlin.coroutines.CoroutineContext$Key",
+        "reason": "Internal"
+    },
+    {
+        "type": "io.micronaut.http.server.context.$ServerRequestContextInstrumentation$Definition$Reference",
+        "member": "Class io.micronaut.http.server.context.$ServerRequestContextInstrumentation$Definition$Reference",
+        "reason": "Removed @Singleton"
+    },
+    {
+        "type": "io.micronaut.http.server.context.$ServerRequestContextInstrumentation$Definition$Reference",
+        "member": "Field $ANNOTATION_METADATA",
+        "reason": "Removed @Singleton"
+    },
+    {
+        "type": "io.micronaut.http.server.context.$ServerRequestContextInstrumentation$Definition$Reference",
+        "member": "Method io.micronaut.http.server.context.$ServerRequestContextInstrumentation$Definition$Reference.getBeanDefinitionType()",
+        "reason": "Removed @Singleton"
+    },
+    {
+        "type": "io.micronaut.http.server.context.$ServerRequestContextInstrumentation$Definition$Reference",
+        "member": "Method io.micronaut.http.server.context.$ServerRequestContextInstrumentation$Definition$Reference.getBeanType()",
+        "reason": "Removed @Singleton"
+    },
+    {
+        "type": "io.micronaut.http.server.context.$ServerRequestContextInstrumentation$Definition$Reference",
+        "member": "Method io.micronaut.http.server.context.$ServerRequestContextInstrumentation$Definition$Reference.load()",
+        "reason": "Removed @Singleton"
+    },
+    {
+        "type": "io.micronaut.http.server.context.$ServerRequestContextInstrumentation$Definition$Reference",
+        "member": "Constructor io.micronaut.http.server.context.$ServerRequestContextInstrumentation$Definition$Reference()",
+        "reason": "Removed @Singleton"
     }
+
 ]

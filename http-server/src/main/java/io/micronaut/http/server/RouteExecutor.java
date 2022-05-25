@@ -34,7 +34,6 @@ import io.micronaut.http.MediaType;
 import io.micronaut.http.MutableHttpHeaders;
 import io.micronaut.http.MutableHttpResponse;
 import io.micronaut.http.bind.binders.ContinuationArgumentBinder;
-import io.micronaut.http.context.ServerRequestContext;
 import io.micronaut.http.exceptions.HttpStatusException;
 import io.micronaut.http.filter.HttpFilter;
 import io.micronaut.http.filter.ServerFilterChain;
@@ -656,7 +655,7 @@ public final class RouteExecutor {
                     coroutineHelper.get().setupCoroutineContext(httpRequest, contextView);
                 }
 
-                Object body = ServerRequestContext.with(httpRequest, (Supplier<Object>) finalRoute::execute);
+                Object body = finalRoute.execute();
                 if (body instanceof Optional) {
                     body = ((Optional<?>) body).orElse(null);
                 }

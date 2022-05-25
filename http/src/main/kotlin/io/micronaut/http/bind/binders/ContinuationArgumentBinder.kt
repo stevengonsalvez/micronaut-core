@@ -15,9 +15,11 @@
  */
 package io.micronaut.http.bind.binders
 
+import io.micronaut.aop.util.MicronautPropagatedContext
 import io.micronaut.core.annotation.Internal
 import io.micronaut.core.bind.ArgumentBinder
 import io.micronaut.core.convert.ArgumentConversionContext
+import io.micronaut.core.propagation.PropagatedContext
 import io.micronaut.core.reflect.ClassUtils
 import io.micronaut.core.type.Argument
 import io.micronaut.http.HttpRequest
@@ -65,7 +67,10 @@ class ContinuationArgumentBinder : TypedRequestArgumentBinder<Continuation<*>> {
         fun setupCoroutineContext(source: HttpRequest<*>, contextView: ContextView, continuationArgumentBinderCoroutineContextFactories: Collection<HttpCoroutineContextFactory<*>>) {
             val customContinuation = source.getAttribute(CONTINUATION_ARGUMENT_ATTRIBUTE_KEY, CustomContinuation::class.java).orElse(null)
             if (customContinuation != null) {
-                var coroutineContext: CoroutineContext = Dispatchers.Default + ServerRequestScopeHandler(source)
+                var coroutineContext: CoroutineContext = Dispatchers.Default
+                if (PropagatedContext.exists()) {
+                    coroutineContext += MicronautPropagatedContext(PropagatedContext.current())
+                }
                 if (reactorContextPresent) {
                     coroutineContext += propagateReactorContext(contextView)
                 }
@@ -131,22 +136,4 @@ private class CustomContinuation: Continuation<Any?>, CoroutineStackFrame, Suppl
 
     override val callerFrame: CoroutineStackFrame? = null
     override fun getStackTraceElement(): StackTraceElement? = null
-}
-
-private class ServerRequestScopeHandler(
-        private val httpRequest: HttpRequest<*>
-) : ThreadContextElement<HttpRequest<*>?> {
-
-    companion object Key : CoroutineContext.Key<ServerRequestScopeHandler>
-
-    override val key: CoroutineContext.Key<ServerRequestScopeHandler>
-        get() = Key
-
-    override fun updateThreadContext(context: CoroutineContext): HttpRequest<*>? {
-        val previous = ServerRequestContext.currentRequest<HttpRequest<*>>().orElse(null)
-        ServerRequestContext.set(httpRequest)
-        return previous
-    }
-
-    override fun restoreThreadContext(context: CoroutineContext, oldState: HttpRequest<*>?) = ServerRequestContext.set(oldState)
 }

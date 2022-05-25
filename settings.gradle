@@ -14,9 +14,10 @@ pluginManagement {
 }
 
 plugins {
-
     id 'io.micronaut.build.shared.settings' version '5.3.9'
 }
+
+enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 rootProject.name = 'micronaut'
 
@@ -27,6 +28,7 @@ include "buffer-netty"
 include "core"
 include "core-reactive"
 include "context"
+include "context-propagation"
 include "function"
 include "function-client"
 include "function-web"

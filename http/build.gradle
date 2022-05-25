@@ -8,6 +8,7 @@ dependencies {
     annotationProcessor project(":graal")
     api project(":inject")
     api project(":core-reactive")
+    implementation project(":context-propagation")
     implementation libs.managed.reactor
     compileOnly libs.kotlinx.coroutines.core
     compileOnly libs.kotlinx.coroutines.reactor
