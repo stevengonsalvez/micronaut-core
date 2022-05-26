@@ -584,10 +584,9 @@ class RoutingInBoundHandler extends SimpleChannelInboundHandler<io.micronaut.htt
                 io.micronaut.http.HttpMethod.permitsRequestBody(request.getMethod()) &&
                 nativeRequest instanceof StreamedHttpRequest &&
                 (!bodyArgument.isPresent() || !route.isSatisfied(bodyArgument.get().getName()))) {
-            PropagatedContext propagatedContext = PropagatedContext.get();
             routeMatchPublisher = Mono.<RouteMatch<?>>create(emitter -> {
                         httpContentProcessorResolver.resolve(request, route)
-                                .subscribe(ReactivePropagation.propagate(propagatedContext, buildSubscriber(request, route, emitter)));
+                                .subscribe(ReactivePropagation.propagate(PropagatedContext.getOrEmpty(), buildSubscriber(request, route, emitter)));
                     }
             ).flux();
         } else {
