@@ -15,13 +15,12 @@
  */
 package io.micronaut.ast.groovy.visitor;
 
-import io.micronaut.ast.groovy.utils.AstAnnotationUtils;
 import io.micronaut.ast.groovy.utils.AstGenericUtils;
-import io.micronaut.ast.groovy.utils.ExtendedParameter;
-import io.micronaut.core.annotation.AnnotationMetadata;
+import io.micronaut.core.annotation.NonNull;
 import io.micronaut.core.util.ArrayUtils;
 import io.micronaut.core.util.CollectionUtils;
 import io.micronaut.inject.ast.ClassElement;
+import io.micronaut.inject.ast.ElementAnnotationMetadataFactory;
 import io.micronaut.inject.ast.ElementModifier;
 import io.micronaut.inject.ast.GenericPlaceholderElement;
 import io.micronaut.inject.ast.MethodElement;
@@ -31,10 +30,12 @@ import org.codehaus.groovy.ast.GenericsType;
 import org.codehaus.groovy.ast.MethodNode;
 import org.codehaus.groovy.ast.Parameter;
 
-import io.micronaut.core.annotation.NonNull;
-
-import java.util.*;
-import java.util.function.Function;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -46,21 +47,24 @@ import java.util.stream.Collectors;
 public class GroovyMethodElement extends AbstractGroovyElement implements MethodElement {
 
     private final MethodNode methodNode;
-    private final GroovyClassElement declaringClass;
+    private final GroovyClassElement owningType;
     private Map<String, ClassNode> genericsSpec = null;
     private ClassElement declaringElement;
     private ParameterElement[] parameters;
 
     /**
-     * @param declaringClass     The declaring class
+     * @param owningType         The owning type
      * @param visitorContext     The visitor context
      * @param methodNode         The {@link MethodNode}
      * @param annotationMetadata The annotation metadata
      */
-    GroovyMethodElement(GroovyClassElement declaringClass, GroovyVisitorContext visitorContext, MethodNode methodNode, AnnotationMetadata annotationMetadata) {
+    GroovyMethodElement(GroovyClassElement owningType,
+                        GroovyVisitorContext visitorContext,
+                        MethodNode methodNode,
+                        ElementAnnotationMetadataFactory annotationMetadata) {
         super(visitorContext, methodNode, annotationMetadata);
         this.methodNode = methodNode;
-        this.declaringClass = declaringClass;
+        this.owningType = owningType;
     }
 
     @Override
@@ -68,11 +72,11 @@ public class GroovyMethodElement extends AbstractGroovyElement implements Method
         final ClassNode[] exceptions = methodNode.getExceptions();
         if (ArrayUtils.isNotEmpty(exceptions)) {
             return Arrays.stream(exceptions)
-                    .map(cn -> getGenericElement(cn, visitorContext.getElementFactory().newClassElement(
-                            cn,
-                            AnnotationMetadata.EMPTY_METADATA,
-                            Collections.emptyMap()
-                    ))).toArray(ClassElement[]::new);
+                .map(cn -> getGenericElement(cn, visitorContext.getElementFactory().newClassElement(
+                    cn,
+                    elementAnnotationMetadataFactory,
+                    Collections.emptyMap()
+                ))).toArray(ClassElement[]::new);
         }
         return ClassElement.ZERO_CLASS_ELEMENTS;
     }
@@ -84,7 +88,11 @@ public class GroovyMethodElement extends AbstractGroovyElement implements Method
 
     @Override
     public String toString() {
-        return methodNode.toString();
+        ClassNode declaringClass = methodNode.getDeclaringClass();
+        if (declaringClass == null) {
+            declaringClass = owningType.getNativeType();
+        }
+        return declaringClass.getName() + "." + methodNode.getName() + "(..)";
     }
 
     @Override
@@ -104,12 +112,17 @@ public class GroovyMethodElement extends AbstractGroovyElement implements Method
 
     @Override
     public boolean isPublic() {
-        return methodNode.isPublic() || methodNode.isSyntheticPublic();
+        return methodNode.isPublic() || (methodNode.isSyntheticPublic() && !isPackagePrivate());
     }
 
     @Override
     public boolean isPrivate() {
         return methodNode.isPrivate();
+    }
+
+    @Override
+    public boolean isPackagePrivate() {
+        return methodNode.isPackageScope();
     }
 
     @Override
@@ -123,7 +136,7 @@ public class GroovyMethodElement extends AbstractGroovyElement implements Method
     }
 
     @Override
-    public Object getNativeType() {
+    public MethodNode getNativeType() {
         return methodNode;
     }
 
@@ -157,15 +170,17 @@ public class GroovyMethodElement extends AbstractGroovyElement implements Method
     @NonNull
     Map<String, ClassNode> getGenericsSpec() {
         if (genericsSpec == null) {
-            Map<String, Map<String, ClassNode>> info = declaringClass.getGenericTypeInfo();
+            Map<String, Map<String, ClassNode>> info = owningType.getGenericTypeInfo();
             if (CollectionUtils.isNotEmpty(info)) {
-                Map<String, ClassNode> typeGenericInfo = info.get(methodNode.getDeclaringClass().getName());
+                ClassNode declaringClazz = methodNode.getDeclaringClass();
+                if (declaringClazz == null) {
+                    declaringClazz = owningType.getNativeType();
+                }
+                Map<String, ClassNode> typeGenericInfo = info.get(declaringClazz.getName());
                 if (CollectionUtils.isNotEmpty(typeGenericInfo)) {
-
                     genericsSpec = AstGenericUtils.createGenericsSpec(methodNode, new HashMap<>(typeGenericInfo));
                 }
             }
-
             if (genericsSpec == null) {
                 genericsSpec = Collections.emptyMap();
             }
@@ -176,20 +191,20 @@ public class GroovyMethodElement extends AbstractGroovyElement implements Method
     @Override
     @NonNull
     public ClassElement getReturnType() {
-        return visitorContext.getElementFactory().newClassElement(methodNode.getReturnType(), AstAnnotationUtils.getAnnotationMetadata(sourceUnit, compilationUnit, methodNode.getReturnType()));
+        return visitorContext.getElementFactory().newClassElement(methodNode.getReturnType(), elementAnnotationMetadataFactory);
     }
 
     @Override
     public ParameterElement[] getParameters() {
         Parameter[] parameters = methodNode.getParameters();
         if (this.parameters == null) {
-            this.parameters = Arrays.stream(parameters).map((Function<Parameter, ParameterElement>) parameter ->
-                    new GroovyParameterElement(
-                            this,
-                            visitorContext,
-                            parameter,
-                            AstAnnotationUtils.getAnnotationMetadata(sourceUnit, compilationUnit, new ExtendedParameter(methodNode, parameter))
-                    )
+            this.parameters = Arrays.stream(parameters).map(parameter ->
+                new GroovyParameterElement(
+                    this,
+                    visitorContext,
+                    parameter,
+                    elementAnnotationMetadataFactory
+                )
             ).toArray(ParameterElement[]::new);
         }
 
@@ -198,11 +213,11 @@ public class GroovyMethodElement extends AbstractGroovyElement implements Method
 
     @Override
     public MethodElement withNewParameters(ParameterElement... newParameters) {
-        final ParameterElement[] existing = getParameters();
-        return new GroovyMethodElement(declaringClass, visitorContext, methodNode, getAnnotationMetadata()) {
+        ParameterElement[] concat = ArrayUtils.concat(getParameters(), newParameters);
+        return new GroovyMethodElement(owningType, visitorContext, methodNode, elementAnnotationMetadataFactory) {
             @Override
             public ParameterElement[] getParameters() {
-                return ArrayUtils.concat(existing, newParameters);
+                return concat;
             }
         };
     }
@@ -210,30 +225,67 @@ public class GroovyMethodElement extends AbstractGroovyElement implements Method
     @Override
     public ClassElement getDeclaringType() {
         if (this.declaringElement == null) {
-            this.declaringElement = visitorContext.getElementFactory().newClassElement(
-                    methodNode.getDeclaringClass(),
-                    AstAnnotationUtils.getAnnotationMetadata(
-                            sourceUnit,
-                            compilationUnit,
-                            methodNode.getDeclaringClass()
-                    )
-            );
+            ClassNode methodDeclaringClass = methodNode.getDeclaringClass();
+            if (methodDeclaringClass == null) {
+                return owningType;
+            }
+            this.declaringElement = visitorContext.getElementFactory().newClassElement(methodDeclaringClass, elementAnnotationMetadataFactory);
         }
         return this.declaringElement;
     }
 
     @Override
-    public ClassElement getOwningType() {
-        return declaringClass;
+    public GroovyClassElement getOwningType() {
+        return owningType;
     }
 
     @Override
     public List<? extends GenericPlaceholderElement> getDeclaredTypeVariables() {
         GenericsType[] genericsTypes = methodNode.getGenericsTypes();
         return genericsTypes == null ?
-                Collections.emptyList() :
-                Arrays.stream(genericsTypes)
-                        .map(gt -> (GenericPlaceholderElement) visitorContext.getElementFactory().newClassElement(gt.getType(), AnnotationMetadata.EMPTY_METADATA))
-                        .collect(Collectors.toList());
+            Collections.emptyList() :
+            Arrays.stream(genericsTypes)
+                .map(gt -> (GenericPlaceholderElement) visitorContext.getElementFactory().newClassElement(gt.getType(), elementAnnotationMetadataFactory))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public boolean overrides(MethodElement overridden) {
+        if (this.equals(overridden)) {
+            return false;
+        }
+        return matches(overridden, this);
+    }
+
+    private static boolean matches(MethodElement existingMethod, MethodElement newMethod) {
+        if (!newMethod.getName().equals(existingMethod.getName()) || existingMethod.getParameters().length != newMethod.getParameters().length) {
+            return false;
+        }
+        for (int i = 0; i < existingMethod.getParameters().length; i++) {
+            ParameterElement existingParameter = existingMethod.getParameters()[i];
+            ParameterElement newParameter = newMethod.getParameters()[i];
+            ClassElement existingType = existingParameter.getGenericType();
+            ClassElement newType = newParameter.getGenericType();
+            if (!newType.isAssignable(existingType)) {
+                return false;
+            }
+        }
+        ClassElement existingReturnType = existingMethod.getReturnType().getGenericType();
+        ClassElement newTypeReturn = newMethod.getReturnType().getGenericType();
+        if (!newTypeReturn.isAssignable(existingReturnType)) {
+            return false;
+        }
+        return isOverriddenByAccessRight(existingMethod, newMethod);
+    }
+
+    private static boolean isOverriddenByAccessRight(MethodElement existingMethod, MethodElement newMethod) {
+        // Cannot override existing private/package private methods even if the signature is the same
+        if (existingMethod.isPrivate()) {
+            return false;
+        }
+        if (existingMethod.isPackagePrivate()) {
+            return newMethod.getDeclaringType().getPackageName().equals(existingMethod.getDeclaringType().getPackageName());
+        }
+        return true;
     }
 }

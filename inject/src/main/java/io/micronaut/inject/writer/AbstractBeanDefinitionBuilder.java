@@ -34,6 +34,7 @@ import io.micronaut.inject.annotation.MutableAnnotationMetadata;
 import io.micronaut.inject.ast.ClassElement;
 import io.micronaut.inject.ast.ConstructorElement;
 import io.micronaut.inject.ast.Element;
+import io.micronaut.inject.ast.ElementAnnotationMetadataFactory;
 import io.micronaut.inject.ast.ElementFactory;
 import io.micronaut.inject.ast.ElementModifier;
 import io.micronaut.inject.ast.ElementQuery;
@@ -97,7 +98,7 @@ public abstract class AbstractBeanDefinitionBuilder implements BeanElementBuilde
             }
         }
     };
-    protected final ConfigurationMetadataBuilder<?> metadataBuilder;
+    protected final ConfigurationMetadataBuilder metadataBuilder;
     protected final VisitorContext visitorContext;
     private final Element originatingElement;
     private final ClassElement originatingType;
@@ -115,20 +116,25 @@ public abstract class AbstractBeanDefinitionBuilder implements BeanElementBuilde
     private Map<String, Map<String, ClassElement>> typeArguments;
     private ClassElement[] exposedTypes;
     private boolean intercepted;
+    protected final ElementAnnotationMetadataFactory elementAnnotationMetadataFactory;
 
     /**
      * Default constructor.
-     * @param originatingElement The originating element
-     * @param beanType The bean type
-     * @param metadataBuilder the metadata builder
-     * @param visitorContext the visitor context
+     *
+     * @param originatingElement               The originating element
+     * @param beanType                         The bean type
+     * @param metadataBuilder                  the metadata builder
+     * @param visitorContext                   the visitor context
+     * @param elementAnnotationMetadataFactory
      */
     protected AbstractBeanDefinitionBuilder(
-            Element originatingElement,
-            ClassElement beanType,
-            ConfigurationMetadataBuilder<?> metadataBuilder,
-            VisitorContext visitorContext) {
+        Element originatingElement,
+        ClassElement beanType,
+        ConfigurationMetadataBuilder metadataBuilder,
+        VisitorContext visitorContext,
+        ElementAnnotationMetadataFactory elementAnnotationMetadataFactory) {
         this.originatingElement = originatingElement;
+        this.elementAnnotationMetadataFactory = elementAnnotationMetadataFactory;
         if (originatingElement instanceof MethodElement) {
             this.originatingType = ((MethodElement) originatingElement).getDeclaringType();
         } else if (originatingElement instanceof ClassElement) {
@@ -823,8 +829,9 @@ public abstract class AbstractBeanDefinitionBuilder implements BeanElementBuilde
             beanDefinitionWriter.visitFieldValue(
                     injectedField.getDeclaringType(),
                     injectedField,
-                    ibf.isReflectionRequired(),
-                    ibf.isDeclaredNullable()
+                    injectedField.getAnnotationMetadata(),
+                    ibf.isDeclaredNullable(),
+                    ibf.isReflectionRequired()
             );
         } else {
             beanDefinitionWriter.visitFieldInjectionPoint(

@@ -15,12 +15,14 @@
  */
 package io.micronaut.inject.visitor;
 
+import io.micronaut.core.annotation.Experimental;
 import io.micronaut.core.annotation.NonNull;
 import io.micronaut.core.annotation.Nullable;
-import io.micronaut.core.annotation.Experimental;
 import io.micronaut.core.convert.value.MutableConvertibleValues;
+import io.micronaut.inject.annotation.AbstractAnnotationMetadataBuilder;
 import io.micronaut.inject.ast.ClassElement;
 import io.micronaut.inject.ast.Element;
+import io.micronaut.inject.ast.ElementAnnotationMetadataFactory;
 import io.micronaut.inject.ast.ElementFactory;
 import io.micronaut.inject.writer.ClassWriterOutputVisitor;
 import io.micronaut.inject.writer.GeneratedFile;
@@ -54,6 +56,12 @@ public interface VisitorContext extends MutableConvertibleValues<Object>, ClassW
      * @since 2.3.0
      */
     @NonNull ElementFactory<?, ?, ?, ?> getElementFactory();
+
+    @NonNull
+    ElementAnnotationMetadataFactory getElementAnnotationMetadataFactory();
+
+    @NonNull
+    AbstractAnnotationMetadataBuilder<?, ?> getAnnotationMetadataBuilder();
 
     /**
      * Allows printing informational messages.
@@ -203,6 +211,16 @@ public interface VisitorContext extends MutableConvertibleValues<Object>, ClassW
      * @return The class element
      */
     default Optional<ClassElement> getClassElement(String name) {
+        return Optional.empty();
+    }
+
+    /**
+     * This method will lookup another class element by name. If it cannot be found an empty optional will be returned.
+     *
+     * @param name The name
+     * @return The class element
+     */
+    default Optional<ClassElement> getClassElement(String name, ElementAnnotationMetadataFactory annotationMetadataFactory) {
         return Optional.empty();
     }
 

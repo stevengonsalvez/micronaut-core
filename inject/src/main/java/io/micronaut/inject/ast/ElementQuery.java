@@ -117,6 +117,20 @@ public interface ElementQuery<T extends Element> {
     ElementQuery<T> onlyInstance();
 
     /**
+     * Indicates to return only static methods/fields.
+     * @return The query
+     * @since 3.8.0
+     */
+    ElementQuery<T> onlyStatic();
+
+    /**
+     * Indicates to exclude any property elements (read write methods and a field)
+     * @return The query
+     * @since 3.8.0
+     */
+    ElementQuery<T> excludePropertyElements();
+
+    /**
      * Indicates to include enum constants, only applicable for fields query.
      * @since 3.4.0
      * @return The query
@@ -249,6 +263,12 @@ public interface ElementQuery<T extends Element> {
         boolean isOnlyInstance();
 
         /**
+         * @return Whether to return only static methods / fields
+         * @since 3.8.0
+         */
+        boolean isOnlyStatic();
+
+        /**
          * @return Whether to include enum constants
          * @since 3.4.0
          */
@@ -265,6 +285,12 @@ public interface ElementQuery<T extends Element> {
          * @since 3.4.0
          */
         boolean isIncludeHiddenElements();
+
+        /**
+         * @return Whether to exclude property elements
+         * @since 3.8.0
+         */
+        boolean isExcludePropertyElements();
 
         /**
          * @return The name predicates

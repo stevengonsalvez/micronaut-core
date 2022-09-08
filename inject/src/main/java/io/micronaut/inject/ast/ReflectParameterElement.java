@@ -21,6 +21,7 @@ import io.micronaut.core.annotation.AnnotationValueBuilder;
 import io.micronaut.core.annotation.NonNull;
 import io.micronaut.inject.annotation.DefaultAnnotationMetadata;
 import io.micronaut.inject.annotation.MutableAnnotationMetadata;
+
 import java.lang.annotation.Annotation;
 import java.util.function.Consumer;
 
@@ -30,7 +31,7 @@ import java.util.function.Consumer;
  * @author graemerocher
  * @since 2.3.0
  */
-final class ReflectParameterElement implements ParameterElement {
+class ReflectParameterElement implements ParameterElement {
     private final ClassElement classElement;
     private final String name;
     private AnnotationMetadata annotationMetadata = AnnotationMetadata.EMPTY_METADATA;
@@ -103,6 +104,12 @@ final class ReflectParameterElement implements ParameterElement {
             consumer.accept(builder);
             this.annotationMetadata = DefaultAnnotationMetadata.mutateMember(annotationMetadata, annotationType, builder.build().getValues());
         }
+        return this;
+    }
+
+    @Override
+    public ParameterElement replaceAnnotations(AnnotationMetadata annotationMetadata) {
+        this.annotationMetadata = annotationMetadata;
         return this;
     }
 }

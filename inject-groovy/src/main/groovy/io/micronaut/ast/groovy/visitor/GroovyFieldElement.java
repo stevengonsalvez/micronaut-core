@@ -15,19 +15,12 @@
  */
 package io.micronaut.ast.groovy.visitor;
 
-import io.micronaut.ast.groovy.utils.AstAnnotationUtils;
-import io.micronaut.core.annotation.AnnotationMetadata;
-import io.micronaut.core.reflect.ClassUtils;
-import io.micronaut.inject.ast.ClassElement;
-import io.micronaut.inject.ast.ElementModifier;
-import io.micronaut.inject.ast.FieldElement;
-import org.codehaus.groovy.ast.*;
+import io.micronaut.inject.ast.ElementAnnotationMetadataFactory;
+import org.apache.groovy.util.concurrent.LazyInitializable;
+import org.codehaus.groovy.ast.FieldNode;
+import org.codehaus.groovy.ast.Variable;
 
-import io.micronaut.core.annotation.NonNull;
-
-import java.lang.reflect.Modifier;
-import java.util.Collections;
-import java.util.Set;
+import java.lang.reflect.Field;
 
 /**
  * A field element returning data from a {@link Variable}. The
@@ -36,148 +29,48 @@ import java.util.Set;
  * @author James Kleeh
  * @since 1.0
  */
-public class GroovyFieldElement extends AbstractGroovyElement implements FieldElement {
+public class GroovyFieldElement extends AbstractGroovyVariableElement {
 
-    private final Variable variable;
+    private final GroovyClassElement owningType;
+    private final FieldNode fieldNode;
 
     /**
-     * @param visitorContext     The visitor context
-     * @param variable           The {@link Variable}
-     * @param annotatedNode      The annotated ndoe
-     * @param annotationMetadata The annotation medatada
+     * @param visitorContext            The visitor context
+     * @param fieldNode                 The {@link FieldNode}
+     * @param annotationMetadataFactory The annotation metadata
      */
-    GroovyFieldElement(
-            GroovyVisitorContext visitorContext,
-            Variable variable, AnnotatedNode annotatedNode, AnnotationMetadata annotationMetadata) {
-        super(visitorContext, annotatedNode, annotationMetadata);
-        this.variable = variable;
+    GroovyFieldElement(GroovyVisitorContext visitorContext,
+                       GroovyClassElement owningType,
+                       FieldNode fieldNode,
+                       ElementAnnotationMetadataFactory annotationMetadataFactory) {
+        super(visitorContext, fieldNode, fieldNode, annotationMetadataFactory);
+        this.owningType = owningType;
+        this.fieldNode = unwrapLazyField(fieldNode);
     }
 
-    @Override
-    public Set<ElementModifier> getModifiers() {
-        if (variable instanceof FieldNode) {
-            return super.resolveModifiers(((FieldNode) variable));
-        } else {
-            return Collections.emptySet();
-        }
-    }
-
-    @Override
-    public String toString() {
-        return variable.getName();
-    }
-
-    @Override
-    public ClassElement getGenericField() {
-        if (isPrimitive()) {
-            ClassNode cn = ClassHelper.make(ClassUtils.getPrimitiveType(getType().getName()).orElse(null));
-            if (cn != null) {
-
-                return new GroovyClassElement(
-                        visitorContext,
-                        cn,
-                        getAnnotationMetadata()
-                ) {
-                    @Override
-                    public boolean isPrimitive() {
-                        return true;
-                    }
-                };
-            } else {
-                return getGenericType();
+    @Deprecated
+    private static FieldNode unwrapLazyField(FieldNode fieldNode) {
+        if (fieldNode instanceof LazyInitializable) {
+            //this nonsense is to work around https://issues.apache.org/jira/browse/GROOVY-10398
+            ((LazyInitializable) fieldNode).lazyInit();
+            try {
+                Field delegate = fieldNode.getClass().getDeclaredField("delegate");
+                delegate.setAccessible(true);
+                fieldNode = (FieldNode) delegate.get(fieldNode);
+            } catch (NoSuchFieldException | IllegalAccessException e) {
+                // no op
             }
-        } else {
-            return new GroovyClassElement(
-                    visitorContext,
-                    (ClassNode) getGenericType().getNativeType(),
-                    getAnnotationMetadata()
-            );
         }
+        return fieldNode;
     }
 
     @Override
-    public boolean isPrimitive() {
-        return getType().isPrimitive();
+    public FieldNode getNativeType() {
+        return fieldNode;
     }
 
     @Override
-    public boolean isArray() {
-        return getType().isArray();
-    }
-
-    @Override
-    public int getArrayDimensions() {
-        return getType().getArrayDimensions();
-    }
-
-    @Override
-    public String getName() {
-        return variable.getName();
-    }
-
-    @Override
-    public boolean isAbstract() {
-        return Modifier.isAbstract(variable.getModifiers());
-    }
-
-    @Override
-    public boolean isStatic() {
-        return Modifier.isStatic(variable.getModifiers());
-    }
-
-    @Override
-    public boolean isPublic() {
-        return Modifier.isPublic(variable.getModifiers());
-    }
-
-    @Override
-    public boolean isPrivate() {
-        return Modifier.isPrivate(variable.getModifiers());
-    }
-
-    @Override
-    public boolean isFinal() {
-        return Modifier.isFinal(variable.getModifiers());
-    }
-
-    @Override
-    public boolean isProtected() {
-        return Modifier.isProtected(variable.getModifiers());
-    }
-
-    @Override
-    public Object getNativeType() {
-        return variable;
-    }
-
-    @NonNull
-    @Override
-    public ClassElement getType() {
-        return visitorContext.getElementFactory().newClassElement(variable.getType(), AstAnnotationUtils.getAnnotationMetadata(sourceUnit, compilationUnit, variable.getType()));
-    }
-
-    @Override
-    public ClassElement getDeclaringType() {
-        ClassNode declaringClass = null;
-        if (variable instanceof FieldNode) {
-            FieldNode fn = (FieldNode) variable;
-            declaringClass = fn.getDeclaringClass();
-        } else if (variable instanceof PropertyNode) {
-            PropertyNode pn = (PropertyNode) variable;
-            declaringClass = pn.getDeclaringClass();
-        }
-
-        if (declaringClass == null) {
-            throw new IllegalStateException("Declaring class could not be established");
-        }
-
-        return visitorContext.getElementFactory().newClassElement(
-                declaringClass,
-                AstAnnotationUtils.getAnnotationMetadata(
-                        sourceUnit,
-                        compilationUnit,
-                        declaringClass
-                )
-        );
+    public GroovyClassElement getOwningType() {
+        return owningType;
     }
 }

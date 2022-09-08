@@ -30,6 +30,7 @@ import io.micronaut.inject.visitor.VisitorContext;
 
 import io.micronaut.core.annotation.NonNull;
 import io.micronaut.core.annotation.Nullable;
+
 import javax.annotation.processing.Messager;
 import javax.lang.model.element.*;
 import javax.lang.model.type.ArrayType;
@@ -67,16 +68,16 @@ public class JavaAnnotationMetadataBuilder extends AbstractAnnotationMetadataBui
     /**
      * Default constructor.
      *
-     * @param elements The elementUtils
-     * @param messager The messager
+     * @param elements        The elementUtils
+     * @param messager        The messager
      * @param annotationUtils The annotation utils
-     * @param modelUtils The model utils
+     * @param modelUtils      The model utils
      */
     public JavaAnnotationMetadataBuilder(
-            Elements elements,
-            Messager messager,
-            AnnotationUtils annotationUtils,
-            ModelUtils modelUtils) {
+        Elements elements,
+        Messager messager,
+        AnnotationUtils annotationUtils,
+        ModelUtils modelUtils) {
         this.elementUtils = elements;
         this.messager = messager;
         this.annotationUtils = annotationUtils;
@@ -119,7 +120,7 @@ public class JavaAnnotationMetadataBuilder extends AbstractAnnotationMetadataBui
             String name = mirror.getAnnotationType().toString();
             if (Repeatable.class.getName().equals(name)) {
                 Map<? extends ExecutableElement, ? extends javax.lang.model.element.AnnotationValue> elementValues = mirror.getElementValues();
-                for (Map.Entry<? extends ExecutableElement, ? extends javax.lang.model.element.AnnotationValue> entry: elementValues.entrySet()) {
+                for (Map.Entry<? extends ExecutableElement, ? extends javax.lang.model.element.AnnotationValue> entry : elementValues.entrySet()) {
                     if (entry.getKey().getSimpleName().toString().equals("value")) {
                         javax.lang.model.element.AnnotationValue av = entry.getValue();
                         Object value = av.getValue();
@@ -153,7 +154,7 @@ public class JavaAnnotationMetadataBuilder extends AbstractAnnotationMetadataBui
             if (Retention.class.getName().equals(annotationTypeName)) {
 
                 final Iterator<? extends AnnotationValue> i = annotationMirror
-                        .getElementValues().values().iterator();
+                    .getElementValues().values().iterator();
                 if (i.hasNext()) {
                     final AnnotationValue av = i.next();
                     final String v = av.getValue().toString();
@@ -211,29 +212,14 @@ public class JavaAnnotationMetadataBuilder extends AbstractAnnotationMetadataBui
             final List<? extends AnnotationMirror> mirrors = element.getAnnotationMirrors();
             for (AnnotationMirror mirror : mirrors) {
                 final String s = mirror.getAnnotationType()
-                        .asElement()
-                        .getSimpleName().toString();
+                    .asElement()
+                    .getSimpleName().toString();
                 if (s.equalsIgnoreCase(simpleName)) {
                     return true;
                 }
             }
         }
         return false;
-    }
-
-    @Override
-    protected boolean isMethodOrClassElement(Element element) {
-        return element instanceof TypeElement || element instanceof ExecutableElement;
-    }
-
-    @NonNull
-    @Override
-    protected String getDeclaringType(@NonNull Element element) {
-        TypeElement typeElement = modelUtils.classElementFor(element);
-        if (typeElement != null) {
-            return typeElement.getQualifiedName().toString();
-        }
-        return element.getSimpleName().toString();
     }
 
     @Override
@@ -246,15 +232,15 @@ public class JavaAnnotationMetadataBuilder extends AbstractAnnotationMetadataBui
         List<? extends AnnotationMirror> annotationMirrors = new ArrayList<>(element.getAnnotationMirrors());
         annotationMirrors.removeIf(mirror -> getAnnotationTypeName(mirror).equals(AnnotationUtil.KOTLIN_METADATA));
         List<AnnotationMirror> expanded = new ArrayList<>(annotationMirrors.size());
-        for (AnnotationMirror annotation: annotationMirrors) {
+        for (AnnotationMirror annotation : annotationMirrors) {
             boolean repeatable = false;
             boolean hasOtherMembers = false;
-            for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry: annotation.getElementValues().entrySet()) {
+            for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry : annotation.getElementValues().entrySet()) {
                 if (entry.getKey().getSimpleName().toString().equals("value")) {
                     Object value = entry.getValue().getValue();
                     if (value instanceof List) {
                         String parentAnnotationName = getAnnotationTypeName(annotation);
-                        for (Object val: (List<?>) value) {
+                        for (Object val : (List<?>) value) {
                             if (val instanceof AnnotationMirror) {
                                 String name = getRepeatableName((AnnotationMirror) val);
                                 if (name != null && name.equals(parentAnnotationName)) {
@@ -323,7 +309,7 @@ public class JavaAnnotationMetadataBuilder extends AbstractAnnotationMetadataBui
             if (enclosingElement instanceof ExecutableElement) {
                 ExecutableElement executableElement = (ExecutableElement) enclosingElement;
                 int variableIdx = executableElement.getParameters().indexOf(variable);
-                for (ExecutableElement overridden: findOverriddenMethods(executableElement)) {
+                for (ExecutableElement overridden : findOverriddenMethods(executableElement)) {
                     hierarchy.add(overridden.getParameters().get(variableIdx));
                 }
             }
@@ -376,11 +362,11 @@ public class JavaAnnotationMetadataBuilder extends AbstractAnnotationMetadataBui
 
     @Override
     protected void readAnnotationRawValues(
-            Element originatingElement,
-            String annotationName, Element member,
-            String memberName,
-            Object annotationValue,
-            Map<CharSequence, Object> annotationValues) {
+        Element originatingElement,
+        String annotationName, Element member,
+        String memberName,
+        Object annotationValue,
+        Map<CharSequence, Object> annotationValues) {
         if (memberName != null && annotationValue instanceof javax.lang.model.element.AnnotationValue && !annotationValues.containsKey(memberName)) {
             final MetadataAnnotationValueVisitor resolver = new MetadataAnnotationValueVisitor(originatingElement);
             ((javax.lang.model.element.AnnotationValue) annotationValue).accept(resolver, this);
@@ -407,9 +393,9 @@ public class JavaAnnotationMetadataBuilder extends AbstractAnnotationMetadataBui
                 final Element element = getAnnotationMirror(annotationName).orElse(null);
                 if (element != null) {
                     final List<? extends AnnotationMirror> childMirrors = element.getAnnotationMirrors()
-                            .stream()
-                            .filter(ann -> !getAnnotationTypeName(ann).equals(annotationName))
-                            .collect(Collectors.toList());
+                        .stream()
+                        .filter(ann -> !getAnnotationTypeName(ann).equals(annotationName))
+                        .collect(Collectors.toList());
                     if (isValidationRequired(childMirrors)) {
                         return true;
                     }
@@ -447,16 +433,16 @@ public class JavaAnnotationMetadataBuilder extends AbstractAnnotationMetadataBui
             TypeElement annotationElement = (TypeElement) element;
             final List<? extends Element> allMembers = elementUtils.getAllMembers(annotationElement);
             allMembers
-                    .stream()
-                    .filter(member -> member.getEnclosingElement().equals(annotationElement))
-                    .filter(ExecutableElement.class::isInstance)
-                    .map(ExecutableElement.class::cast)
-                    .filter(this::isValidDefaultValue)
-                    .forEach(executableElement -> {
-                                final AnnotationValue defaultValue = executableElement.getDefaultValue();
-                                defaultValues.put(executableElement, defaultValue);
-                            }
-                    );
+                .stream()
+                .filter(member -> member.getEnclosingElement().equals(annotationElement))
+                .filter(ExecutableElement.class::isInstance)
+                .map(ExecutableElement.class::cast)
+                .filter(this::isValidDefaultValue)
+                .forEach(executableElement -> {
+                        final AnnotationValue defaultValue = executableElement.getDefaultValue();
+                        defaultValues.put(executableElement, defaultValue);
+                    }
+                );
         }
         return defaultValues;
     }
@@ -502,7 +488,7 @@ public class JavaAnnotationMetadataBuilder extends AbstractAnnotationMetadataBui
                     populateTypeHierarchy(e, hierarchy);
                 }
             }
-        } else  {
+        } else {
             while (JavaModelUtils.resolveKind(element, ElementKind.CLASS).isPresent()) {
 
                 TypeElement typeElement = (TypeElement) element;
@@ -554,11 +540,11 @@ public class JavaAnnotationMetadataBuilder extends AbstractAnnotationMetadataBui
     }
 
     private void addOverriddenMethodIfNecessary(ExecutableElement executableElement,
-                           List<ExecutableElement> overridden,
-                           TypeElement declaringElement,
-                           TypeElement supertype) {
+                                                List<ExecutableElement> overridden,
+                                                TypeElement declaringElement,
+                                                TypeElement supertype) {
         final List<ExecutableElement> possibleMethods =
-                ElementFilter.methodsIn(supertype.getEnclosedElements());
+            ElementFilter.methodsIn(supertype.getEnclosedElements());
         for (ExecutableElement possibleMethod : possibleMethods) {
             if (elementUtils.overrides(executableElement, possibleMethod, declaringElement)) {
                 overridden.add(possibleMethod);
@@ -580,7 +566,7 @@ public class JavaAnnotationMetadataBuilder extends AbstractAnnotationMetadataBui
      * Checks if a method has an annotation.
      *
      * @param element The method
-     * @param ann    The annotation to look for
+     * @param ann     The annotation to look for
      * @return Whether if the method has the annotation
      */
     @Override
@@ -592,7 +578,7 @@ public class JavaAnnotationMetadataBuilder extends AbstractAnnotationMetadataBui
      * Checks if a method has an annotation.
      *
      * @param element The method
-     * @param ann    The annotation to look for
+     * @param ann     The annotation to look for
      * @return Whether if the method has the annotation
      */
     @Override

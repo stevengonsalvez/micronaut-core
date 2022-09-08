@@ -13,7 +13,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package io.micronaut.validation;
+
+import io.micronaut.core.annotation.Internal;
+
+import java.lang.annotation.Documented;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.Target;
+
+import static java.lang.annotation.RetentionPolicy.SOURCE;
+
 /**
- * Package to organize classes responsible for validating executable methods at compile time.
+ * Internal method marks a type or a method for validation.
+ *
+ * @author Denis Stepanov
+ * @since 3.7.0
  */
-package io.micronaut.validation.executable;
+@Documented
+@Retention(SOURCE)
+@Target({ElementType.METHOD, ElementType.TYPE, ElementType.FIELD})
+@Internal
+public @interface RequiresValidation {
+}
