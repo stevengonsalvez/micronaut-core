@@ -27,13 +27,6 @@ dockerBuild {
 }
 ----
 
-Then use `dockerPush` to push a built image of the application:
-
-[source,bash]
-----
-$ ./gradlew dockerPush
-----
-
 For Maven, define the following plugin in your POM:
 
 [source,xml]
@@ -50,6 +43,23 @@ For Maven, define the following plugin in your POM:
 ----
 
 Then invoke the `deploy` lifecycle phase specifying the packaging type as either `docker` or `docker-native`:
+
+For Gradle, define the following plugin in your build.gradle
+
+[source, groovy]
+----
+plugins {
+    id("com.google.cloud.tools:jib-maven-plugin")
+}
+----
+
+Then use `dockerPush` to push a built image of the application:
+
+[source,bash]
+----
+$ ./gradlew dockerPush
+----
+
 
 [source,bash]
 ----
