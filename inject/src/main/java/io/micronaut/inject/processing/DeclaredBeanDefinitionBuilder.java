@@ -28,19 +28,19 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class SimpleBeanProcessor extends AbstractBeanProcessor {
+public class DeclaredBeanDefinitionBuilder extends AbstractBeanDefinitionBuilder {
 
     private final AtomicInteger adaptedMethodIndex = new AtomicInteger(0);
     protected final boolean isAopProxy;
     protected BeanDefinitionVisitor aopProxyVisitor;
 
-    protected SimpleBeanProcessor(ClassElement classElement, VisitorContext visitorContext, boolean isAopProxy) {
+    protected DeclaredBeanDefinitionBuilder(ClassElement classElement, VisitorContext visitorContext, boolean isAopProxy) {
         super(classElement, visitorContext);
         this.isAopProxy = isAopProxy;
     }
 
     @Override
-    public final void build() {
+    public final void buildInternal() {
         BeanDefinitionVisitor beanDefinitionVisitor = createBeanDefinitionVisitor();
         if (isAopProxy) {
             // Always create AOP proxy

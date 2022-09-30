@@ -23,9 +23,9 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-final class ConfigurationPropertiesBeanProcessor extends SimpleBeanProcessor {
+final class ConfigurationPropertiesBeanDefinitionBuilder extends DeclaredBeanDefinitionBuilder {
 
-    protected ConfigurationPropertiesBeanProcessor(ClassElement classElement, VisitorContext visitorContext) {
+    ConfigurationPropertiesBeanDefinitionBuilder(ClassElement classElement, VisitorContext visitorContext) {
         super(classElement, visitorContext, false);
     }
 

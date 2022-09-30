@@ -28,11 +28,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
-final class FactoryBeanProcessor extends SimpleBeanProcessor {
+final class FactoryBeanDefinitionBuilder extends DeclaredBeanDefinitionBuilder {
 
     private final AtomicInteger factoryMethodIndex = new AtomicInteger();
 
-    protected FactoryBeanProcessor(ClassElement classElement, VisitorContext visitorContext, boolean isAopProxy) {
+    FactoryBeanDefinitionBuilder(ClassElement classElement, VisitorContext visitorContext, boolean isAopProxy) {
         super(classElement, visitorContext, isAopProxy);
     }
 

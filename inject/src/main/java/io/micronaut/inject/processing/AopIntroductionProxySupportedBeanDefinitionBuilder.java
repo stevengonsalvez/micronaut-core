@@ -8,9 +8,9 @@ import io.micronaut.inject.ast.PropertyElement;
 import io.micronaut.inject.visitor.VisitorContext;
 import io.micronaut.inject.writer.BeanDefinitionVisitor;
 
-final class AopIntroductionProxySupportedBeanProcessor extends SimpleBeanProcessor {
+final class AopIntroductionProxySupportedBeanDefinitionBuilder extends DeclaredBeanDefinitionBuilder {
 
-    AopIntroductionProxySupportedBeanProcessor(ClassElement classElement, VisitorContext visitorContext, boolean isAopProxy) {
+    AopIntroductionProxySupportedBeanDefinitionBuilder(ClassElement classElement, VisitorContext visitorContext, boolean isAopProxy) {
         super(classElement, visitorContext, isAopProxy);
     }
 

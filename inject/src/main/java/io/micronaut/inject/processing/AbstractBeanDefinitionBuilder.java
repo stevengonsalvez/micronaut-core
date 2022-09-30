@@ -30,7 +30,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-public abstract class AbstractBeanProcessor implements BeanProcessor {
+public abstract class AbstractBeanDefinitionBuilder implements BeanDefinitionBuilder {
 
     public static final String ANN_VALIDATED = "io.micronaut.validation.Validated";
     protected static final String ANN_REQUIRES_VALIDATION = "io.micronaut.validation.RequiresValidation";
@@ -43,7 +43,7 @@ public abstract class AbstractBeanProcessor implements BeanProcessor {
 
     protected final AopHelper aopHelper;
 
-    protected AbstractBeanProcessor(ClassElement classElement, VisitorContext visitorContext) {
+    protected AbstractBeanDefinitionBuilder(ClassElement classElement, VisitorContext visitorContext) {
         this.classElement = classElement;
         this.visitorContext = visitorContext;
         checkPackage(classElement);
@@ -66,12 +66,12 @@ public abstract class AbstractBeanProcessor implements BeanProcessor {
     }
 
     @Override
-    public Collection<BeanDefinitionVisitor> process() {
-        build();
+    public final Collection<BeanDefinitionVisitor> build() {
+        buildInternal();
         return beanDefinitionWriters;
     }
 
-    public abstract void build();
+    public abstract void buildInternal();
 
     private void checkPackage(ClassElement classElement) {
         io.micronaut.inject.ast.PackageElement packageElement = classElement.getPackage();

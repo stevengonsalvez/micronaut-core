@@ -22,40 +22,40 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-public abstract class BeanProcessorFactory {
+public abstract class BeanDefinitionBuilderFactory {
 
     @NonNull
-    public static BeanProcessor produce(ClassElement classElement, VisitorContext visitorContext) {
+    public static BeanDefinitionBuilder produce(ClassElement classElement, VisitorContext visitorContext) {
         boolean isAbstract = classElement.isAbstract();
         boolean isIntroduction = classElement.hasStereotype(AnnotationUtil.ANN_INTRODUCTION);
-        if (ConfigurationPropertiesBeanProcessor.isConfigurationProperties(classElement)) {
+        if (ConfigurationPropertiesBeanDefinitionBuilder.isConfigurationProperties(classElement)) {
             if (classElement.isInterface()) {
-                return new IntroductionInterfaceBeanProcessor(classElement, visitorContext, null);
+                return new IntroductionInterfaceBeanDefinitionBuilder(classElement, visitorContext, null);
             }
-            return new ConfigurationPropertiesBeanProcessor(classElement, visitorContext);
+            return new ConfigurationPropertiesBeanDefinitionBuilder(classElement, visitorContext);
         }
         boolean aopProxyType = isAopProxyType(classElement);
         if (!isAbstract && classElement.hasStereotype(Factory.class)) {
-            return new FactoryBeanProcessor(classElement, visitorContext, aopProxyType);
+            return new FactoryBeanDefinitionBuilder(classElement, visitorContext, aopProxyType);
         }
         if (aopProxyType) {
             if (isIntroduction) {
-                return new AopIntroductionProxySupportedBeanProcessor(classElement, visitorContext, true);
+                return new AopIntroductionProxySupportedBeanDefinitionBuilder(classElement, visitorContext, true);
             }
-            return new SimpleBeanProcessor(classElement, visitorContext, true);
+            return new DeclaredBeanDefinitionBuilder(classElement, visitorContext, true);
         }
         if (isIntroduction) {
             if (classElement.isInterface()) {
-                return new IntroductionInterfaceBeanProcessor(classElement, visitorContext, null);
+                return new IntroductionInterfaceBeanDefinitionBuilder(classElement, visitorContext, null);
             }
-            return new AopIntroductionProxySupportedBeanProcessor(classElement, visitorContext, false);
+            return new AopIntroductionProxySupportedBeanDefinitionBuilder(classElement, visitorContext, false);
         }
         // NOTE: In Micronaut 3 abstract classes are allowed to be beans, but are not pickup to be beans just by having methods or fields with @Inject
         if (isDeclaredBean(classElement) || (!isAbstract && (containsInjectMethod(classElement) || containsInjectField(classElement)))) {
             if (classElement.hasStereotype("groovy.lang.Singleton")) {
                 throw new ProcessingException(classElement, "Class annotated with groovy.lang.Singleton instead of jakarta.inject.Singleton. Import jakarta.inject.Singleton to use Micronaut Dependency Injection.");
             }
-            return new SimpleBeanProcessor(classElement, visitorContext, false);
+            return new DeclaredBeanDefinitionBuilder(classElement, visitorContext, false);
         }
         return Collections::emptyList;
     }
@@ -84,7 +84,7 @@ public abstract class BeanProcessorFactory {
         return classElement.getEnclosedElement(
             ElementQuery.ALL_FIELDS
                 .onlyDeclared()
-                .annotated(BeanProcessorFactory::containsInjectPoint)
+                .annotated(BeanDefinitionBuilderFactory::containsInjectPoint)
         ).isPresent();
     }
 

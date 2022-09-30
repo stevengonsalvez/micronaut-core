@@ -29,8 +29,8 @@ import io.micronaut.inject.ProcessingException;
 import io.micronaut.inject.annotation.AbstractAnnotationMetadataBuilder;
 import io.micronaut.inject.ast.ElementAnnotationMetadataFactory;
 import io.micronaut.inject.configuration.ConfigurationMetadataBuilder;
-import io.micronaut.inject.processing.BeanProcessor;
-import io.micronaut.inject.processing.BeanProcessorFactory;
+import io.micronaut.inject.processing.BeanDefinitionBuilder;
+import io.micronaut.inject.processing.BeanDefinitionBuilderFactory;
 import io.micronaut.inject.processing.JavaModelUtils;
 import io.micronaut.inject.visitor.BeanElementVisitor;
 import io.micronaut.inject.visitor.VisitorConfiguration;
@@ -176,7 +176,7 @@ public class BeanDefinitionInjectProcessor extends AbstractInjectAnnotationProce
                         }
                         if (element.getKind() == ENUM) {
                             final AnnotationMetadata am = annotationMetadataBuilder.lookupOrBuildForType(element).get();
-                            if (BeanProcessorFactory.isDeclaredBeanInMetadata(am)) {
+                            if (BeanDefinitionBuilderFactory.isDeclaredBeanInMetadata(am)) {
                                 error(element, "Enum types cannot be defined as beans");
                             }
                             return;
@@ -221,8 +221,8 @@ public class BeanDefinitionInjectProcessor extends AbstractInjectAnnotationProce
                             }
                             JavaClassElement classElement = javaVisitorContext.getElementFactory()
                                 .newClassElement(typeElement, annotationMetadataFactory);
-                            BeanProcessor beanProcessor = BeanProcessorFactory.produce(classElement, javaVisitorContext);
-                            for (BeanDefinitionVisitor writer : beanProcessor.process()) {
+                            BeanDefinitionBuilder beanDefinitionBuilder = BeanDefinitionBuilderFactory.produce(classElement, javaVisitorContext);
+                            for (BeanDefinitionVisitor writer : beanDefinitionBuilder.build()) {
                                 if (processed.add(writer.getBeanDefinitionName())) {
                                     processBeanDefinitions(writer);
                                 } else {

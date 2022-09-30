@@ -10,17 +10,17 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-final class IntroductionInterfaceBeanProcessor extends AbstractBeanProcessor {
+final class IntroductionInterfaceBeanDefinitionBuilder extends AbstractBeanDefinitionBuilder {
 
     private final String factoryBeanDefinitionName;
 
-    IntroductionInterfaceBeanProcessor(ClassElement classElement, VisitorContext visitorContext, String factoryBeanDefinitionName) {
+    IntroductionInterfaceBeanDefinitionBuilder(ClassElement classElement, VisitorContext visitorContext, String factoryBeanDefinitionName) {
         super(classElement, visitorContext);
         this.factoryBeanDefinitionName = factoryBeanDefinitionName;
     }
 
     @Override
-    public void build() {
+    public void buildInternal() {
         BeanDefinitionVisitor aopProxyWriter = aopHelper.createIntroductionAopProxyWriter(classElement, metadataBuilder, visitorContext);
         aopProxyWriter.visitTypeArguments(classElement.getAllTypeArguments());
         MethodElement constructorElement = classElement.getPrimaryConstructor().orElse(null);
@@ -50,12 +50,12 @@ final class IntroductionInterfaceBeanProcessor extends AbstractBeanProcessor {
         }
 
         if (classElement.hasAnnotation(ANN_REQUIRES_VALIDATION)) {
-            if (ConfigurationPropertiesBeanProcessor.isConfigurationProperties(classElement)) {
+            if (ConfigurationPropertiesBeanDefinitionBuilder.isConfigurationProperties(classElement)) {
                 // Configuration beans are validated at the startup and don't require validation advice
                 aopProxyWriter.setValidated(true);
             } else {
                 for (MethodElement methodElement : classElement.getEnclosedElements(ElementQuery.ALL_METHODS.annotated(am -> am.hasAnnotation(ANN_REQUIRES_VALIDATION)))) {
-                    methodElement.annotate(AbstractBeanProcessor.ANN_VALIDATED);
+                    methodElement.annotate(AbstractBeanDefinitionBuilder.ANN_VALIDATED);
                 }
             }
         }
