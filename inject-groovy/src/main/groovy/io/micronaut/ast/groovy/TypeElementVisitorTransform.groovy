@@ -23,6 +23,7 @@ import io.micronaut.ast.groovy.visitor.GroovyVisitorContext
 import io.micronaut.ast.groovy.visitor.LoadedVisitor
 import io.micronaut.core.annotation.Generated
 import io.micronaut.core.order.OrderUtil
+import io.micronaut.inject.ProcessingException
 import io.micronaut.inject.ast.ClassElement
 import io.micronaut.inject.ast.ElementQuery
 import io.micronaut.inject.ast.MethodElement
@@ -86,8 +87,12 @@ class TypeElementVisitorTransform implements ASTTransformation, CompilationUnitA
                     if (!loadedVisitor.matchesClass(targetClassElement)) {
                         continue
                     }
-                    def visitor = new ElementVisitor(source, compilationUnit, classNode, [loadedVisitor], visitorContext, targetClassElement)
-                    visitor.visitClass(classNode)
+                    try {
+                        def visitor = new ElementVisitor(source, compilationUnit, classNode, [loadedVisitor], visitorContext, targetClassElement)
+                        visitor.visitClass(classNode)
+                    } catch (ProcessingException ex) {
+                        visitorContext.fail(ex.getMessage(), ex.getElement());
+                    }
                 }
             }
         }

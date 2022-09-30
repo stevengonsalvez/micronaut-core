@@ -1,4 +1,4 @@
-package io.micronaut.inject.processing.gen;
+package io.micronaut.inject.processing;
 
 import io.micronaut.context.annotation.ConfigurationBuilder;
 import io.micronaut.context.annotation.ConfigurationInject;
@@ -6,6 +6,7 @@ import io.micronaut.context.annotation.ConfigurationReader;
 import io.micronaut.context.annotation.Property;
 import io.micronaut.core.annotation.AnnotationMetadata;
 import io.micronaut.core.annotation.AnnotationValue;
+import io.micronaut.inject.ProcessingException;
 import io.micronaut.inject.annotation.AnnotationMetadataHierarchy;
 import io.micronaut.inject.ast.BeanPropertiesConfiguration;
 import io.micronaut.inject.ast.ClassElement;
@@ -22,9 +23,9 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-public class ConfigurationPropertiesBeanBuilder extends SimpleBeanBuilder {
+final class ConfigurationPropertiesBeanProcessor extends SimpleBeanProcessor {
 
-    protected ConfigurationPropertiesBeanBuilder(ClassElement classElement, VisitorContext visitorContext) {
+    protected ConfigurationPropertiesBeanProcessor(ClassElement classElement, VisitorContext visitorContext) {
         super(classElement, visitorContext, false);
     }
 

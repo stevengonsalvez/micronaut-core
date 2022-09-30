@@ -1,4 +1,4 @@
-package io.micronaut.inject.processing.gen;
+package io.micronaut.inject.processing;
 
 import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.ConfigurationReader;
@@ -8,6 +8,7 @@ import io.micronaut.context.annotation.Value;
 import io.micronaut.core.annotation.AnnotationMetadata;
 import io.micronaut.core.annotation.AnnotationUtil;
 import io.micronaut.core.util.StringUtils;
+import io.micronaut.inject.ProcessingException;
 import io.micronaut.inject.annotation.AnnotationMetadataHierarchy;
 import io.micronaut.inject.annotation.MutableAnnotationMetadata;
 import io.micronaut.inject.ast.ClassElement;
@@ -27,11 +28,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class FactoryBeanBuilder extends SimpleBeanBuilder {
+final class FactoryBeanProcessor extends SimpleBeanProcessor {
 
     private final AtomicInteger factoryMethodIndex = new AtomicInteger();
 
-    protected FactoryBeanBuilder(ClassElement classElement, VisitorContext visitorContext, boolean isAopProxy) {
+    protected FactoryBeanProcessor(ClassElement classElement, VisitorContext visitorContext, boolean isAopProxy) {
         super(classElement, visitorContext, isAopProxy);
     }
 

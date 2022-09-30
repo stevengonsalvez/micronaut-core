@@ -23,11 +23,10 @@ import io.micronaut.ast.groovy.utils.InMemoryClassWriterOutputVisitor
 import io.micronaut.ast.groovy.visitor.GroovyPackageElement
 import io.micronaut.ast.groovy.visitor.GroovyVisitorContext
 import io.micronaut.context.annotation.Configuration
-import io.micronaut.context.annotation.ConfigurationReader
 import io.micronaut.context.annotation.Context
-import io.micronaut.core.annotation.AnnotationUtil
-import io.micronaut.inject.processing.gen.AbstractBeanBuilder
-import io.micronaut.inject.processing.gen.ProcessingException
+import io.micronaut.inject.ProcessingException
+import io.micronaut.inject.processing.BeanProcessor
+import io.micronaut.inject.processing.BeanProcessorFactory
 import io.micronaut.inject.visitor.VisitorConfiguration
 import io.micronaut.inject.writer.BeanConfigurationWriter
 import io.micronaut.inject.writer.BeanDefinitionReferenceWriter
@@ -36,7 +35,6 @@ import io.micronaut.inject.writer.ClassWriterOutputVisitor
 import io.micronaut.inject.writer.DirectoryClassWriterOutputVisitor
 import org.codehaus.groovy.ast.ASTNode
 import org.codehaus.groovy.ast.AnnotatedNode
-import org.codehaus.groovy.ast.ClassCodeVisitorSupport
 import org.codehaus.groovy.ast.ClassNode
 import org.codehaus.groovy.ast.InnerClassNode
 import org.codehaus.groovy.ast.ModuleNode
@@ -49,7 +47,6 @@ import org.codehaus.groovy.transform.ASTTransformation
 import org.codehaus.groovy.transform.GroovyASTTransformation
 
 import java.lang.reflect.Modifier
-
 /**
  * An AST transformation that produces metadata for use by the injection container
  *
@@ -71,14 +68,10 @@ class InjectTransform implements ASTTransformation, CompilationUnitAware {
         boolean defineClassesInMemory = source.classLoader instanceof InMemoryByteCodeGroovyClassLoader
         ClassWriterOutputVisitor outputVisitor
         if (defineClassesInMemory) {
-            outputVisitor = new InMemoryClassWriterOutputVisitor(
-                    source.classLoader as InMemoryByteCodeGroovyClassLoader
-            )
+            outputVisitor = new InMemoryClassWriterOutputVisitor(source.classLoader as InMemoryByteCodeGroovyClassLoader)
 
         } else {
-            outputVisitor = new DirectoryClassWriterOutputVisitor(
-                    classesDir
-            )
+            outputVisitor = new DirectoryClassWriterOutputVisitor(classesDir)
         }
         List<ClassNode> classes = moduleNode.getClasses()
         if (classes.size() == 1) {
@@ -100,64 +93,40 @@ class InjectTransform implements ASTTransformation, CompilationUnitAware {
                         AstMessageUtils.error(source, classNode, "Error generating bean configuration for package-info class [${classNode.name}]: $e.message")
                     }
                 }
-
                 return
             }
         }
 
+        GroovyVisitorContext groovyVisitorContext = new GroovyVisitorContext(source, unit) {
+            @Override
+            VisitorConfiguration getConfiguration() {
+                new VisitorConfiguration() {
+                    @Override
+                    boolean includeTypeLevelAnnotationsInGenericArguments() {
+                        return false
+                    }
+                }
+            }
+        }
+        def elementAnnotationMetadataFactory = groovyVisitorContext
+                .getElementAnnotationMetadataFactory()
+                .readOnly()
         for (ClassNode classNode in classes) {
             if ((classNode instanceof InnerClassNode && !Modifier.isStatic(classNode.getModifiers()))) {
                 continue
             }
-            GroovyVisitorContext groovyVisitorContext = new GroovyVisitorContext(source, unit) {
-                @Override
-                VisitorConfiguration getConfiguration() {
-                    new VisitorConfiguration() {
-                        @Override
-                        boolean includeTypeLevelAnnotationsInGenericArguments() {
-                            return false
-                        }
+            try {
+                def classElement = groovyVisitorContext.getElementFactory().newClassElement(classNode, elementAnnotationMetadataFactory)
+                BeanProcessor beanProcessor = BeanProcessorFactory.produce(classElement, groovyVisitorContext);
+                beanProcessor.process().forEach(writer -> {
+                    if (writer.getBeanTypeName() == classNode.getName()) {
+                        beanDefinitionWriters.put(classNode, writer)
+                    } else {
+                        beanDefinitionWriters.put(new AnnotatedNode(), writer)
                     }
-                }
-            }
-            def elementAnnotationMetadataFactory = groovyVisitorContext
-                    .getElementAnnotationMetadataFactory()
-                    .readOnly()
-            def thisElement = groovyVisitorContext.getElementFactory().newClassElement(classNode, elementAnnotationMetadataFactory)
-            if (!classNode.isInterface() || classNode.isInterface() && (thisElement.hasStereotype(AnnotationUtil.ANN_INTRODUCTION) ||
-                    thisElement.hasStereotype(ConfigurationReader.class))) {
-
-                try {
-                    new ClassCodeVisitorSupport() {
-
-                        @Override
-                        void visitClass(ClassNode node) {
-                            def classElement = node == thisElement.getNativeType() ? thisElement : groovyVisitorContext.getElementFactory().newClassElement(node, groovyVisitorContext.getElementAnnotationMetadataFactory())
-                            AbstractBeanBuilder beanBuilder = AbstractBeanBuilder.of(classElement, groovyVisitorContext);
-                            if (beanBuilder != null) {
-                                beanBuilder.build()
-                                beanBuilder.getBeanDefinitionWriters().forEach(writer -> {
-                                    if (writer.getBeanTypeName() == node.getName()) {
-                                        beanDefinitionWriters.put(node, writer)
-                                    } else {
-                                        beanDefinitionWriters.put(new AnnotatedNode(), writer)
-                                    }
-                                })
-                            }
-
-                            super.visitClass(node)
-                        }
-
-                        @Override
-                        protected SourceUnit getSourceUnit() {
-                            return sourceUnit
-                        }
-
-                    }.visitClass(classNode)
-
-                } catch (ProcessingException ex) {
-                    groovyVisitorContext.fail(ex.getMessage(), ex.getElement());
-                }
+                })
+            } catch (ProcessingException ex) {
+                groovyVisitorContext.fail(ex.getMessage(), ex.getElement());
             }
         }
 
@@ -166,10 +135,7 @@ class InjectTransform implements ASTTransformation, CompilationUnitAware {
             String beanTypeName = beanDefWriter.beanTypeName
             AnnotatedNode beanClassNode = entry.key
             try {
-                BeanDefinitionReferenceWriter beanReferenceWriter = new BeanDefinitionReferenceWriter(
-                        beanDefWriter
-                )
-
+                BeanDefinitionReferenceWriter beanReferenceWriter = new BeanDefinitionReferenceWriter(beanDefWriter)
                 beanReferenceWriter.setRequiresMethodProcessing(beanDefWriter.requiresMethodProcessing())
                 beanReferenceWriter.setContextScope(beanDefWriter.getAnnotationMetadata().hasDeclaredAnnotation(Context))
                 beanDefWriter.visitBeanDefinitionEnd()
@@ -179,17 +145,13 @@ class InjectTransform implements ASTTransformation, CompilationUnitAware {
                 } else if (source.source instanceof StringReaderSource && defineClassesInMemory) {
                     beanReferenceWriter.accept(outputVisitor)
                     beanDefWriter.accept(outputVisitor)
-
                 }
-
-
             } catch (Throwable e) {
                 AstMessageUtils.error(source, beanClassNode, "Error generating bean definition class for dependency injection of class [${beanTypeName}]: $e.message")
                 e.printStackTrace(System.err)
             }
         }
         if (!beanDefinitionWriters.isEmpty()) {
-
             try {
                 outputVisitor.finish()
 

@@ -1,4 +1,4 @@
-package io.micronaut.inject.processing.gen;
+package io.micronaut.inject.processing;
 
 import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.Executable;
@@ -8,6 +8,7 @@ import io.micronaut.core.annotation.AnnotationMetadata;
 import io.micronaut.core.annotation.AnnotationUtil;
 import io.micronaut.core.annotation.NonNull;
 import io.micronaut.core.annotation.Nullable;
+import io.micronaut.inject.ProcessingException;
 import io.micronaut.inject.annotation.AnnotationMetadataHierarchy;
 import io.micronaut.inject.annotation.MutableAnnotationMetadata;
 import io.micronaut.inject.ast.ClassElement;
@@ -27,13 +28,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class SimpleBeanBuilder extends AbstractBeanBuilder {
+public class SimpleBeanProcessor extends AbstractBeanProcessor {
 
     private final AtomicInteger adaptedMethodIndex = new AtomicInteger(0);
     protected final boolean isAopProxy;
     protected BeanDefinitionVisitor aopProxyVisitor;
 
-    protected SimpleBeanBuilder(ClassElement classElement, VisitorContext visitorContext, boolean isAopProxy) {
+    protected SimpleBeanProcessor(ClassElement classElement, VisitorContext visitorContext, boolean isAopProxy) {
         super(classElement, visitorContext);
         this.isAopProxy = isAopProxy;
     }

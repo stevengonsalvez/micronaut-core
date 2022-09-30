@@ -1,4 +1,4 @@
-package io.micronaut.inject.processing.gen;
+package io.micronaut.inject.processing;
 
 import io.micronaut.inject.ast.ClassElement;
 import io.micronaut.inject.ast.ElementQuery;
@@ -10,11 +10,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-final class IntroductionInterfaceBeanBuilder extends AbstractBeanBuilder {
+final class IntroductionInterfaceBeanProcessor extends AbstractBeanProcessor {
 
     private final String factoryBeanDefinitionName;
 
-    IntroductionInterfaceBeanBuilder(ClassElement classElement, VisitorContext visitorContext, String factoryBeanDefinitionName) {
+    IntroductionInterfaceBeanProcessor(ClassElement classElement, VisitorContext visitorContext, String factoryBeanDefinitionName) {
         super(classElement, visitorContext);
         this.factoryBeanDefinitionName = factoryBeanDefinitionName;
     }
@@ -50,12 +50,12 @@ final class IntroductionInterfaceBeanBuilder extends AbstractBeanBuilder {
         }
 
         if (classElement.hasAnnotation(ANN_REQUIRES_VALIDATION)) {
-            if (ConfigurationPropertiesBeanBuilder.isConfigurationProperties(classElement)) {
+            if (ConfigurationPropertiesBeanProcessor.isConfigurationProperties(classElement)) {
                 // Configuration beans are validated at the startup and don't require validation advice
                 aopProxyWriter.setValidated(true);
             } else {
                 for (MethodElement methodElement : classElement.getEnclosedElements(ElementQuery.ALL_METHODS.annotated(am -> am.hasAnnotation(ANN_REQUIRES_VALIDATION)))) {
-                    methodElement.annotate(AbstractBeanBuilder.ANN_VALIDATED);
+                    methodElement.annotate(AbstractBeanProcessor.ANN_VALIDATED);
                 }
             }
         }

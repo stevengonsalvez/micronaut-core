@@ -21,9 +21,9 @@ import io.micronaut.inject.ast.ParameterElement;
 import io.micronaut.inject.ast.TypedElement;
 import io.micronaut.inject.configuration.ConfigurationMetadataBuilder;
 import io.micronaut.inject.processing.JavaModelUtils;
-import io.micronaut.inject.processing.gen.AbstractBeanBuilder;
-import io.micronaut.inject.processing.gen.AopHelper;
-import io.micronaut.inject.processing.gen.ProcessingException;
+import io.micronaut.inject.processing.AbstractBeanProcessor;
+import io.micronaut.inject.processing.AopHelper;
+import io.micronaut.inject.ProcessingException;
 import io.micronaut.inject.visitor.VisitorContext;
 import io.micronaut.inject.writer.BeanDefinitionVisitor;
 import io.micronaut.inject.writer.BeanDefinitionWriter;
@@ -36,7 +36,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static io.micronaut.inject.processing.gen.AbstractBeanBuilder.getElementAnnotationMetadata;
+import static io.micronaut.inject.processing.AbstractBeanProcessor.getElementAnnotationMetadata;
 
 @Internal
 public class AopHelperImpl implements AopHelper {
@@ -89,7 +89,7 @@ public class AopHelperImpl implements AopHelper {
 
         MethodElement next = methods.iterator().next();
 
-        AbstractBeanBuilder.methodAnnotationsGuard(visitorContext, next, targetMethod -> {
+        AbstractBeanProcessor.methodAnnotationsGuard(visitorContext, next, targetMethod -> {
 
             ParameterElement[] sourceParams = sourceMethod.getParameters();
             ParameterElement[] targetParams = targetMethod.getParameters();
@@ -237,7 +237,7 @@ public class AopHelperImpl implements AopHelper {
     }
 
     private static void addToIntroduction(AopProxyWriter aopProxyWriter, ClassElement classElement, MethodElement methodElement) {
-        AbstractBeanBuilder.adjustMethodToIncludeClassMetadata(classElement, methodElement);
+        AbstractBeanProcessor.adjustMethodToIncludeClassMetadata(classElement, methodElement);
         AnnotationMetadata methodAnnotationMetadata = getElementAnnotationMetadata(methodElement);
 
         if (InterceptedMethodUtil.hasAroundStereotype(methodAnnotationMetadata)) {

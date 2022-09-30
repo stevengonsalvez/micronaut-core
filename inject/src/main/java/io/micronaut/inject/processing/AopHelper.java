@@ -1,4 +1,4 @@
-package io.micronaut.inject.processing.gen;
+package io.micronaut.inject.processing;
 
 import io.micronaut.core.annotation.AnnotationMetadata;
 import io.micronaut.core.annotation.Nullable;

@@ -1,15 +1,16 @@
-package io.micronaut.inject.processing.gen;
+package io.micronaut.inject.processing;
 
 import io.micronaut.core.annotation.AnnotationMetadata;
+import io.micronaut.inject.ProcessingException;
 import io.micronaut.inject.ast.ClassElement;
 import io.micronaut.inject.ast.MethodElement;
 import io.micronaut.inject.ast.PropertyElement;
 import io.micronaut.inject.visitor.VisitorContext;
 import io.micronaut.inject.writer.BeanDefinitionVisitor;
 
-public class AopIntroductionProxySupportedBeanBuilder extends SimpleBeanBuilder {
+final class AopIntroductionProxySupportedBeanProcessor extends SimpleBeanProcessor {
 
-    protected AopIntroductionProxySupportedBeanBuilder(ClassElement classElement, VisitorContext visitorContext, boolean isAopProxy) {
+    AopIntroductionProxySupportedBeanProcessor(ClassElement classElement, VisitorContext visitorContext, boolean isAopProxy) {
         super(classElement, visitorContext, isAopProxy);
     }
 

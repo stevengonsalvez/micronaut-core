@@ -1,25 +1,19 @@
-package io.micronaut.inject.processing.gen;
+package io.micronaut.inject.processing;
 
 import io.micronaut.context.RequiresCondition;
-import io.micronaut.context.annotation.Bean;
-import io.micronaut.context.annotation.DefaultScope;
-import io.micronaut.context.annotation.Executable;
-import io.micronaut.context.annotation.Factory;
-import io.micronaut.context.annotation.Property;
 import io.micronaut.context.annotation.Requires;
-import io.micronaut.context.annotation.Value;
 import io.micronaut.core.annotation.AnnotationMetadata;
 import io.micronaut.core.annotation.AnnotationUtil;
 import io.micronaut.core.annotation.AnnotationValue;
 import io.micronaut.core.annotation.NonNull;
 import io.micronaut.core.annotation.Nullable;
 import io.micronaut.core.reflect.ClassUtils;
+import io.micronaut.inject.ProcessingException;
 import io.micronaut.inject.annotation.AnnotationMetadataHierarchy;
 import io.micronaut.inject.annotation.AnnotationMetadataReference;
 import io.micronaut.inject.ast.ClassElement;
 import io.micronaut.inject.ast.Element;
 import io.micronaut.inject.ast.ElementFactory;
-import io.micronaut.inject.ast.ElementQuery;
 import io.micronaut.inject.ast.FieldElement;
 import io.micronaut.inject.ast.MemberElement;
 import io.micronaut.inject.ast.MethodElement;
@@ -29,13 +23,14 @@ import io.micronaut.inject.writer.BeanDefinitionReferenceWriter;
 import io.micronaut.inject.writer.BeanDefinitionVisitor;
 
 import java.lang.annotation.Annotation;
+import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-public abstract class AbstractBeanBuilder {
+public abstract class AbstractBeanProcessor implements BeanProcessor {
 
     public static final String ANN_VALIDATED = "io.micronaut.validation.Validated";
     protected static final String ANN_REQUIRES_VALIDATION = "io.micronaut.validation.RequiresValidation";
@@ -48,7 +43,7 @@ public abstract class AbstractBeanBuilder {
 
     protected final AopHelper aopHelper;
 
-    protected AbstractBeanBuilder(ClassElement classElement, VisitorContext visitorContext) {
+    protected AbstractBeanProcessor(ClassElement classElement, VisitorContext visitorContext) {
         this.classElement = classElement;
         this.visitorContext = visitorContext;
         checkPackage(classElement);
@@ -70,94 +65,19 @@ public abstract class AbstractBeanBuilder {
         }
     }
 
+    @Override
+    public Collection<BeanDefinitionVisitor> process() {
+        build();
+        return beanDefinitionWriters;
+    }
+
+    public abstract void build();
+
     private void checkPackage(ClassElement classElement) {
         io.micronaut.inject.ast.PackageElement packageElement = classElement.getPackage();
         if (packageElement.isUnnamed()) {
             throw new ProcessingException(classElement, "Micronaut beans cannot be in the default package");
         }
-    }
-
-    public static AbstractBeanBuilder of(ClassElement classElement, VisitorContext visitorContext) {
-        boolean isAbstract = classElement.isAbstract();
-        boolean isIntroduction = classElement.hasStereotype(AnnotationUtil.ANN_INTRODUCTION);
-        if (ConfigurationPropertiesBeanBuilder.isConfigurationProperties(classElement)) {
-            if (classElement.isInterface()) {
-                return new IntroductionInterfaceBeanBuilder(classElement, visitorContext, null);
-            }
-            return new ConfigurationPropertiesBeanBuilder(classElement, visitorContext);
-        }
-        boolean aopProxyType = isAopProxyType(classElement);
-        if (!isAbstract && classElement.hasStereotype(Factory.class)) {
-            return new FactoryBeanBuilder(classElement, visitorContext, aopProxyType);
-        }
-        if (aopProxyType) {
-            if (isIntroduction) {
-                return new AopIntroductionProxySupportedBeanBuilder(classElement, visitorContext, true);
-            }
-            return new SimpleBeanBuilder(classElement, visitorContext, true);
-        }
-        if (isIntroduction) {
-            if (classElement.isInterface()) {
-                return new IntroductionInterfaceBeanBuilder(classElement, visitorContext, null);
-            }
-            return new AopIntroductionProxySupportedBeanBuilder(classElement, visitorContext, false);
-        }
-        // NOTE: In Micronaut 3 abstract classes are allowed to be beans, but are not pickup to be beans just by having methods or fields with @Inject
-        if (isDeclaredBean(classElement) || (!isAbstract && (containsInjectMethod(classElement) || containsInjectField(classElement)))) {
-            if (classElement.hasStereotype("groovy.lang.Singleton")) {
-                throw new ProcessingException(classElement, "Class annotated with groovy.lang.Singleton instead of jakarta.inject.Singleton. Import jakarta.inject.Singleton to use Micronaut Dependency Injection.");
-            }
-            return new SimpleBeanBuilder(classElement, visitorContext, false);
-        }
-        return null;
-    }
-
-    public abstract void build();
-
-    private static boolean isDeclaredBean(ClassElement classElement) {
-        if (isDeclaredBeanInMetadata(classElement.getAnnotationMetadata())) {
-            return true;
-        }
-        if (classElement.isAbstract()) {
-            return false;
-        }
-        return classElement.hasStereotype(Executable.class) ||
-            classElement.hasStereotype(AnnotationUtil.QUALIFIER) ||
-            classElement.getPrimaryConstructor().map(constructor -> constructor.hasStereotype(AnnotationUtil.INJECT)).orElse(false);
-    }
-
-    private static boolean containsInjectMethod(ClassElement classElement) {
-        return classElement.getEnclosedElement(
-            ElementQuery.ALL_METHODS.onlyConcrete()
-                .onlyDeclared()
-                .annotated(annotationMetadata -> annotationMetadata.hasDeclaredAnnotation(AnnotationUtil.INJECT))
-        ).isPresent();
-    }
-
-    private static boolean containsInjectField(ClassElement classElement) {
-        return classElement.getEnclosedElement(
-            ElementQuery.ALL_FIELDS
-                .onlyDeclared()
-                .annotated(AbstractBeanBuilder::containsInjectPoint)
-        ).isPresent();
-    }
-
-    private static boolean containsInjectPoint(AnnotationMetadata annotationMetadata) {
-        return annotationMetadata.hasStereotype(AnnotationUtil.INJECT)
-            || annotationMetadata.hasStereotype(Value.class)
-            || annotationMetadata.hasStereotype(Property.class);
-    }
-
-    private static boolean isAopProxyType(ClassElement classElement) {
-        return !classElement.isAbstract()
-            && !classElement.isAssignable("io.micronaut.aop.Interceptor")
-            && hasAroundStereotype(classElement.getAnnotationMetadata());
-    }
-
-    private static boolean isDeclaredBeanInMetadata(AnnotationMetadata concreteClassMetadata) {
-        return concreteClassMetadata.hasDeclaredStereotype(Bean.class) ||
-            concreteClassMetadata.hasStereotype(AnnotationUtil.SCOPE) ||
-            concreteClassMetadata.hasStereotype(DefaultScope.class);
     }
 
     /**
@@ -217,10 +137,6 @@ public abstract class AbstractBeanBuilder {
         }
     }
 
-    public List<BeanDefinitionVisitor> getBeanDefinitionWriters() {
-        return beanDefinitionWriters;
-    }
-
     protected AnnotationMetadata annotationMetadataCombineWithBeanMetadata(BeanDefinitionVisitor beanDefinitionVisitor, AnnotationMetadata annotationMetadata) {
         AnnotationMetadata beanClassAnnotationMetadata = new AnnotationMetadataReference(
             beanDefinitionVisitor.getBeanDefinitionName() + BeanDefinitionReferenceWriter.REF_SUFFIX,
@@ -255,10 +171,6 @@ public abstract class AbstractBeanBuilder {
 
     protected void classAnnotationsGuard(ClassElement classElement, Consumer<ClassElement> consumer) {
         classAnnotationsGuard(visitorContext, classElement, consumer);
-    }
-
-    public static void adjustMethodToIncludeClassMetadata(MethodElement methodElement) {
-        adjustMethodToIncludeClassMetadata(methodElement.getDeclaringType(), methodElement);
     }
 
     public static void adjustMethodToIncludeClassMetadata(ClassElement classElement, MethodElement methodElement) {
